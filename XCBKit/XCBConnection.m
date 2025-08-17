@@ -567,6 +567,32 @@ static XCBConnection *sharedInstance;
                 return;
             }
 
+            if (*atom == [[ewmhService atomService] atomFromCachedAtomsWithKey:[ewmhService EWMHWMWindowTypeDesktop]])
+            {
+                NSLog(@"Desktop window %u to be registered", [window window]);
+                [self registerWindow:window];
+                [self mapWindow:window];
+                [window setDecorated:NO];
+    
+                // Stack desktop window at the bottom
+                [window stackBelow];
+    
+                XCBWindow *parentWindow = [[XCBWindow alloc] initWithXCBWindow:anEvent->parent andConnection:self];
+                [window setParentWindow:parentWindow];
+                [icccmService wmClassForWindow:window];
+                [window setWindowType:[ewmhService EWMHWMWindowTypeDesktop]];
+    
+                // Ensure all other windows stay above
+                [self restackAllWindowsAboveDesktop:window];
+    
+                window = nil;
+                ewmhService = nil;
+                name = nil;
+                parentWindow = nil;
+                free(windowTypeReply);
+                return;
+            }
+
             if (*atom == [[ewmhService atomService] atomFromCachedAtomsWithKey:[ewmhService EWMHWMWindowTypeMenu]])
             {
                 NSLog(@"Menu window %u to be registered", [window window]);
@@ -1670,6 +1696,35 @@ static XCBConnection *sharedInstance;
     }
 
     windows = nil;
+}
+
+- (void)restackAllWindowsAboveDesktop:(XCBWindow *)desktopWindow
+{
+    NSArray *windows = [windowsMap allValues];
+    for (XCBWindow *win in windows) {
+        if (win != desktopWindow && 
+            ![win isKindOfClass:[XCBTitleBar class]] &&
+            ![[win windowType] isEqualToString:[[EWMHService sharedInstanceWithConnection:self] EWMHWMWindowTypeDesktop]]) {
+            
+            if ([win isKindOfClass:[XCBFrame class]]) {
+                [win stackAbove];
+            } else if ([win decorated] && [win parentWindow]) {
+                [[win parentWindow] stackAbove];
+            }
+        }
+    }
+}
+
+- (XCBWindow *)findDesktopWindow 
+{
+    EWMHService *ewmhService = [EWMHService sharedInstanceWithConnection:self];
+    NSArray *windows = [windowsMap allValues];
+    for (XCBWindow *win in windows) {
+        if ([[win windowType] isEqualToString:[ewmhService EWMHWMWindowTypeDesktop]]) {
+            return win;
+        }
+    }
+    return nil;
 }
 
 - (void) sendEvent:(const char *)anEvent toClient:(XCBWindow*)aWindow propagate:(BOOL)propagating

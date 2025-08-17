@@ -122,6 +122,8 @@
 - (void) borderClickedForFrameWindow:(XCBFrame*)aFrame withEvent:(xcb_button_press_event_t*)anEvent;
 - (void)drawAllTitleBarsExcept:(XCBTitleBar *)aTitileBar;
 - (BOOL) registerAsWindowManager:(BOOL)replace screenId:(uint32_t)screenId selectionWindow:(XCBWindow*)selectionWindow;
+- (void) restackAllWindowsAboveDesktop:(XCBWindow *)desktopWindow;
+- (XCBWindow *)findDesktopWindow;
 
 /*** ACCESSORS ***/
 

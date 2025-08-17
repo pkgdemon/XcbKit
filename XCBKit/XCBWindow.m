@@ -844,10 +844,17 @@
 
 - (void)stackBelow
 {
-    uint32_t values[1] = {XCB_STACK_MODE_BELOW};
-    xcb_configure_window([connection connection], window, XCB_CONFIG_WINDOW_STACK_MODE, &values);
+    uint32_t values[2];
+    values[0] = XCB_NONE;  // No sibling - put at bottom
+    values[1] = XCB_STACK_MODE_BELOW;
+    xcb_configure_window([connection connection], window, 
+                         XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE, 
+                         values);
     isAbove = NO;
     isBelow = YES;
+    
+    // Force flush
+    [connection flush];
 }
 
 - (void)grabButton
