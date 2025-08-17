@@ -927,12 +927,12 @@
     XCBAtomService *atomService = [XCBAtomService sharedInstanceWithConnection:connection];
     ICCCMService *icccmService = [ICCCMService sharedInstanceWithConnection:connection];
     EWMHService *ewmhService = [EWMHService sharedInstanceWithConnection:connection];
-
-    if (hasInputHint)
-        [self setInputFocus:XCB_INPUT_FOCUS_PARENT time:[connection currentTime]];
-
+    
+    // Always set input focus for compatibility with Chromium
+    [self setInputFocus:XCB_INPUT_FOCUS_POINTER_ROOT time:[connection currentTime]];
+    [connection flush];  // Force flush after setting focus
+    
     /*** check for the WMTakeFocus protocol ***/
-
     if ([icccmService hasProtocol:[icccmService WMTakeFocus] forWindow:self])
     {
         event.type = [atomService atomFromCachedAtomsWithKey:[icccmService WMProtocols]];
@@ -944,12 +944,9 @@
         event.data.data32[2] = 0;
         event.data.data32[3] = 0;
         event.sequence = 0;
-
         [connection sendEvent:(const char*) &event toClient:self propagate:NO];
     }
-
     [ewmhService updateNetActiveWindow:self];
-
     atomService = nil;
     icccmService = nil;
     ewmhService = nil;

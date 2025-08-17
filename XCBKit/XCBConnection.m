@@ -1032,13 +1032,15 @@ static XCBConnection *sharedInstance;
         xcb_allow_events(connection, XCB_ALLOW_REPLAY_POINTER, anEvent->time);
         frame = (XCBFrame *) [window parentWindow];
         clientWindow = [frame childWindowForKey:ClientWindow];
+        
+        // Focus the client window explicitly
+        [clientWindow focus];
+        
         EWMHService *ewmhService = [EWMHService sharedInstanceWithConnection:self];
-        [ewmhService updateNetActiveWindow:window];
+        [ewmhService updateNetActiveWindow:clientWindow];  // Changed from 'window' to 'clientWindow'
         ewmhService = nil;
-
     }
 
-    [clientWindow focus];
     //[frame stackAbove];
 
     titleBar = (XCBTitleBar *) [frame childWindowForKey:TitleBar];
