@@ -136,7 +136,6 @@
     values[1] = TITLE_MASK_VALUES;
 
     TitleBarSettingsService *settings = [TitleBarSettingsService sharedInstance];
-
     uint16_t height = [settings heightDefined] ? [settings height] : [settings defaultHeight];
 
     XCBCreateWindowTypeRequest* request = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBTitleBarRequest];
@@ -158,45 +157,54 @@
     [self addChildWindow:titleBar withKey:TitleBar];
 
     EWMHService *ewmhService = [EWMHService sharedInstanceWithConnection:connection];
-
-    xcb_get_property_reply_t* reply = [ewmhService getProperty:[ewmhService EWMHWMName]
-                              propertyType:XCB_GET_PROPERTY_TYPE_ANY
-                                 forWindow:clientWindow
-                                    delete:NO
-                                    length:UINT32_MAX];
-
-    NSLog(@"=== FRAME DEBUG: Checking for EWMH title, reply: %p ===", reply);  // <-- ADD THIS
+    ICCCMService* icccmService = [ICCCMService sharedInstanceWithConnection:connection];
+    NSString* windowTitle = nil;
     
-    NSString* windowTitle;
-    if (reply)
-    {
-        char *value = xcb_get_property_value(reply);
-        int len = xcb_get_property_value_length(reply);
-        NSLog(@"Window title: %s, len: %d", value, len);
+    // Force a sync to ensure all client properties are processed
+    [connection flush];
+    xcb_aux_sync([connection connection]);
+    
+    // Quick attempts - only try 5 times with minimal delay
+    int attempts = 0;
+    int maxAttempts = 5; // 5 * 1ms = 5ms max wait
+    
+    while (attempts < maxAttempts) {
+        // Try EWMH first
+        xcb_get_property_reply_t* reply = [ewmhService getProperty:[ewmhService EWMHWMName]
+                                  propertyType:XCB_GET_PROPERTY_TYPE_ANY
+                                     forWindow:clientWindow
+                                        delete:NO
+                                        length:UINT32_MAX];
+
+        if (reply && reply->length > 0) {
+            char *value = xcb_get_property_value(reply);
+            int len = xcb_get_property_value_length(reply);
+            
+            if (value && len > 0) {
+                windowTitle = [NSString stringWithCString:value length:len];
+                free(reply);
+                break;
+            }
+            free(reply);
+        }
         
-        NSLog(@"=== FRAME DEBUG: EWMH raw value: '%s', len: %d ===", value, len);  // <-- ADD THIS
+        // If EWMH failed, try ICCCM
+        if (!windowTitle || [windowTitle length] == 0) {
+            windowTitle = [icccmService getWmNameForWindow:clientWindow];
+            if (windowTitle && [windowTitle length] > 0) {
+                break;
+            }
+        }
         
-        windowTitle = [NSString stringWithCString:value length:len];
-        
-        NSLog(@"=== FRAME DEBUG: EWMH windowTitle NSString: '%@' ===", windowTitle);  // <-- ADD THIS
+        // Very short wait and process events
+        usleep(1000); // 1ms
+        [connection flush];
+        attempts++;
     }
     
-    // for now if it is nil just set an empty string
-    if (windowTitle == nil)
-    {
-        NSLog(@"=== FRAME DEBUG: EWMH title was nil, trying ICCCM ===");  // <-- ADD THIS
-        
-        ICCCMService* icccmService = [ICCCMService sharedInstanceWithConnection:connection];
-        windowTitle = [icccmService getWmNameForWindow:clientWindow];
-        
-        NSLog(@"=== FRAME DEBUG: ICCCM windowTitle: '%@' ===", windowTitle);  // <-- ADD THIS
-        
-        if (windowTitle == nil)
-        {
-            NSLog(@"=== FRAME DEBUG: Both titles nil, using empty string ===");  // <-- ADD THIS
-            windowTitle = @"";
-        }
-        icccmService = nil;
+    // Use placeholder if we still don't have a title
+    if (!windowTitle || [windowTitle length] == 0) {
+        windowTitle = @"";
     }
 
     [titleBar onScreen];
@@ -209,7 +217,6 @@
     [titleBar drawTitleBarComponentsPixmaps];
     [titleBar putWindowBackgroundWithPixmap:[titleBar pixmap]];
     [titleBar putButtonsBackgroundPixmaps:YES];
-    NSLog(@"=== FRAME DEBUG: About to call setWindowTitle with: '%@' ===", windowTitle);
     [titleBar setWindowTitle:windowTitle];
     [clientWindow setDecorated:YES];
     [clientWindow setWindowBorderWidth:0];
@@ -224,12 +231,11 @@
     titleBar = nil;
     clientWindow = nil;
     ewmhService = nil;
+    icccmService = nil;
     windowTitle = nil;
     scr = nil;
     rootVisual = nil;
     settings = nil;
-
-    free(reply);
 }
 
 /*** performance while resizing pixel by pixel is critical so we do everything we can to improve it also if the message signature looks bad ***/

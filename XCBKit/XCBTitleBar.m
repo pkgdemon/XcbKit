@@ -396,53 +396,78 @@
 {
     NSLog(@"=== TITLE DEBUG: Setting window title: '%@' ===", title);
     
-    // CRITICAL FIX: Don't return early if titleIsSet - allow title updates
-    // The original code had: if (titleIsSet) return;
-    // This prevented title updates after the initial render
-    
-    // CRITICAL FIX: Properly handle nil titles
-    if (title == nil || [title length] == 0)
-    {
-        NSLog(@"No title to set to the window.");
-        // Don't return here - we should still clear any existing title
-        windowTitle = @""; // Set to empty string instead of leaving as nil
-    }
-    else 
-    {
-        // CRITICAL FIX: Properly retain the title string
-        windowTitle = [title copy]; // Use copy to ensure we own the string
+    if (title == nil || [title length] == 0) {
+        windowTitle = @"";
+        titleIsSet = NO;
+    } else {
+        windowTitle = [title copy];
+        titleIsSet = YES;
     }
 
+    // Don't draw to window - draw to pixmaps instead!
+    if (windowTitle != nil && [windowTitle length] > 0) {
+        [self drawTitleToPixmaps:windowTitle];
+    }
+}
+
+// Add this new method to XCBTitleBar.m:
+- (void)drawTitleToPixmaps:(NSString*)title {
     XCBWindow *rootWindow = [parentWindow parentWindow];
     XCBScreen *screen = [rootWindow screen];
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
     [visual setVisualTypeForScreen:screen];
     
-    NSLog(@"=== TITLE RENDER DEBUG: About to create CairoDrawer, window size: %fx%f ===", 
-          (double)[self windowRect].size.width, (double)[self windowRect].size.height);
+    XCBColor black = XCBMakeColor(0, 0, 0, 1);
     
-    CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
+    // Draw to active pixmap
+    cairo_surface_t *activeSurface = cairo_xcb_surface_create([[super connection] connection], 
+                                                              [self pixmap], 
+                                                              [visual visualType], 
+                                                              [self windowRect].size.width, 
+                                                              [self windowRect].size.height);
+    cairo_t *activeCr = cairo_create(activeSurface);
     
-    // CRITICAL FIX: Only draw text if we have a valid title
-    if (windowTitle != nil && [windowTitle length] > 0)
-    {
-        XCBColor black = XCBMakeColor(0,0,0,1);
-        NSLog(@"=== TITLE RENDER DEBUG: About to call drawText with title: '%@' ===", windowTitle);
-        [drawer drawText:windowTitle withColor:black];
-        NSLog(@"=== TITLE RENDER DEBUG: drawText completed ===");
-        titleIsSet = YES;
-    }
-    else
-    {
-        NSLog(@"=== TITLE RENDER DEBUG: Skipping drawText - no valid title ===");
-        titleIsSet = NO;
-    }
+    [self drawTitleText:title withCairo:activeCr color:black];
+    
+    cairo_surface_flush(activeSurface);
+    cairo_surface_destroy(activeSurface);
+    cairo_destroy(activeCr);
+    
+    // Draw to inactive pixmap
+    cairo_surface_t *inactiveSurface = cairo_xcb_surface_create([[super connection] connection], 
+                                                                [self dPixmap], 
+                                                                [visual visualType], 
+                                                                [self windowRect].size.width, 
+                                                                [self windowRect].size.height);
+    cairo_t *inactiveCr = cairo_create(inactiveSurface);
+    
+    [self drawTitleText:title withCairo:inactiveCr color:black];
+    
+    cairo_surface_flush(inactiveSurface);
+    cairo_surface_destroy(inactiveSurface);
+    cairo_destroy(inactiveCr);
     
     // Clean up
-    drawer = nil;
-    screen = nil;
     visual = nil;
     rootWindow = nil;
+}
+
+// Add this helper method:
+- (void)drawTitleText:(NSString*)text withCairo:(cairo_t*)cr color:(XCBColor)color {
+    cairo_set_source_rgb(cr, color.redComponent, color.greenComponent, color.blueComponent);
+    cairo_select_font_face(cr, "Serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, 11);
+    
+    cairo_text_extents_t extents;
+    const char* utfString = [text UTF8String];
+    cairo_text_extents(cr, utfString, &extents);
+
+    CGFloat halfLength = extents.width / 2;
+    CGFloat textPositionX = (CGFloat)[self windowRect].size.width / 2;
+    CGFloat textPositionY = (CGFloat)[self windowRect].size.height / 2 + 2;
+    
+    cairo_move_to(cr, textPositionX - halfLength, textPositionY);
+    cairo_show_text(cr, utfString);
 }
 
 - (NSString*) windowTitle
