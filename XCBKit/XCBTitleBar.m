@@ -307,28 +307,10 @@
     frame = nil;
 }
 
-// CRITICAL FIX: Override drawTitleBarComponents to ensure title is rendered
 - (void)drawTitleBarComponents
 {
+    // Just copy from the appropriate pixmap - the title is already there
     [super drawArea:[super windowRect]];
-    
-    // Always redraw the title when drawing components
-    if (windowTitle != nil && [windowTitle length] > 0)
-    {
-        XCBWindow *rootWindow = [parentWindow parentWindow];
-        XCBScreen *screen = [rootWindow screen];
-        XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
-        [visual setVisualTypeForScreen:screen];
-        
-        CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
-        XCBColor black = XCBMakeColor(0,0,0,1);
-        [drawer drawText:windowTitle withColor:black];
-        
-        drawer = nil;
-        screen = nil;
-        visual = nil;
-        rootWindow = nil;
-    }
     
     // Draw buttons
     if (hideWindowButton != nil)
@@ -392,6 +374,7 @@
     }
 }
 
+// Also update setWindowTitle to be simpler:
 - (void) setWindowTitle:(NSString *) title
 {
     NSLog(@"=== TITLE DEBUG: Setting window title: '%@' ===", title);
@@ -404,13 +387,10 @@
         titleIsSet = YES;
     }
 
-    // Don't draw to window - draw to pixmaps instead!
-    if (windowTitle != nil && [windowTitle length] > 0) {
-        [self drawTitleToPixmaps:windowTitle];
-    }
+    // Don't draw here - let drawTitleBarComponents handle it
+    // This prevents multiple drawing calls during resize
 }
 
-// Add this new method to XCBTitleBar.m:
 - (void)drawTitleToPixmaps:(NSString*)title {
     XCBWindow *rootWindow = [parentWindow parentWindow];
     XCBScreen *screen = [rootWindow screen];
