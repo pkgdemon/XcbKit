@@ -27,6 +27,7 @@ $(FRAMEWORK_NAME)_OBJC_FILES = \
 			XCBGeometryReply.m \
 			XCBQueryTreeReply.m\
 			XCBShape.m \
+			XCBThemeService.m \
 			services/EWMHService.m \
 			services/XCBAtomService.m \
 			services/ICCCMService.m \
@@ -55,6 +56,7 @@ $(FRAMEWORK_NAME)_HEADER_FILES = \
 			XCBGeometryReply.h \
 			XCBQueryTreeReply.h \
 			XCBShape.h \
+			XCBThemeService.h \
 			services/EWMHService.h \
 			services/XCBAtomService.h \
 			services/ICCCMService.h \
@@ -84,7 +86,7 @@ $(FRAMEWORK_NAME)_RESOURCE_FILES = \
 
 ADDITIONAL_OBJCFLAGS = -std=c99 -g -O0 -fobjc-arc -fblocks -Wall #-Wno-unused -Werror -Wall
 
-LIBRARIES_DEPEND_UPON += $(shell pkg-config --libs xcb xcb-icccm cairo xcb-xfixes xcb-aux xcb-cursor xcb-shape) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
+LIBRARIES_DEPEND_UPON += $(shell pkg-config --libs xcb xcb-icccm cairo xcb-xfixes xcb-aux xcb-cursor xcb-shape) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS) $(GUI_LIBS)
 
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 include $(GNUSTEP_MAKEFILES)/framework.make
