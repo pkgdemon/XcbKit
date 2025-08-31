@@ -55,6 +55,7 @@ XCB_EVENT_MASK_KEY_PRESS
 - (void) generateButtons;
 - (void) setButtonsAbove:(BOOL)aValue;
 - (void) putButtonsBackgroundPixmaps:(BOOL)aValue;
+- (void) drawTextToPixmaps:(NSString*)title;
 
 /****************
  *    ACCESORS  *

@@ -165,26 +165,37 @@
                                     delete:NO
                                     length:UINT32_MAX];
 
+    NSLog(@"=== FRAME DEBUG: Checking for EWMH title, reply: %p ===", reply);  // <-- ADD THIS
+    
     NSString* windowTitle;
     if (reply)
     {
         char *value = xcb_get_property_value(reply);
         int len = xcb_get_property_value_length(reply);
         NSLog(@"Window title: %s, len: %d", value, len);
+        
+        NSLog(@"=== FRAME DEBUG: EWMH raw value: '%s', len: %d ===", value, len);  // <-- ADD THIS
+        
         windowTitle = [NSString stringWithCString:value length:len];
+        
+        NSLog(@"=== FRAME DEBUG: EWMH windowTitle NSString: '%@' ===", windowTitle);  // <-- ADD THIS
     }
-
+    
     // for now if it is nil just set an empty string
-
     if (windowTitle == nil)
     {
+        NSLog(@"=== FRAME DEBUG: EWMH title was nil, trying ICCCM ===");  // <-- ADD THIS
+        
         ICCCMService* icccmService = [ICCCMService sharedInstanceWithConnection:connection];
-
         windowTitle = [icccmService getWmNameForWindow:clientWindow];
-
+        
+        NSLog(@"=== FRAME DEBUG: ICCCM windowTitle: '%@' ===", windowTitle);  // <-- ADD THIS
+        
         if (windowTitle == nil)
+        {
+            NSLog(@"=== FRAME DEBUG: Both titles nil, using empty string ===");  // <-- ADD THIS
             windowTitle = @"";
-
+        }
         icccmService = nil;
     }
 
@@ -198,10 +209,11 @@
     [titleBar drawTitleBarComponentsPixmaps];
     [titleBar putWindowBackgroundWithPixmap:[titleBar pixmap]];
     [titleBar putButtonsBackgroundPixmaps:YES];
+    NSLog(@"=== FRAME DEBUG: About to call setWindowTitle with: '%@' ===", windowTitle);
+    [titleBar setWindowTitle:windowTitle];
     [clientWindow setDecorated:YES];
     [clientWindow setWindowBorderWidth:0];
     [connection mapWindow:titleBar];
-    [titleBar setWindowTitle:windowTitle];
 
     XCBPoint position = XCBMakePoint(0, height - 1);
     [connection reparentWindow:clientWindow toWindow:self position:position];

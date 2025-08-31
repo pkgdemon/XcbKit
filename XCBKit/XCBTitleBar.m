@@ -37,6 +37,9 @@
     [super setConnection:aConnection];
 
     ewmhService = [EWMHService sharedInstanceWithConnection:[super connection]];
+    
+    // CRITICAL FIX: Initialize windowTitle to nil instead of leaving it uninitialized
+    windowTitle = nil;
     titleIsSet = NO;
     
     return self;
@@ -304,16 +307,53 @@
     frame = nil;
 }
 
+// CRITICAL FIX: Override drawTitleBarComponents to ensure title is rendered
 - (void)drawTitleBarComponents
 {
     [super drawArea:[super windowRect]];
-    XCBRect area = [hideWindowButton windowRect];
-    area.position.x = 0;
-    area.position.y = 0;
-    [hideWindowButton drawArea:area];
-    [maximizeWindowButton drawArea:area];
-    [minimizeWindowButton drawArea:area];
-    //TODO: window title??
+    
+    // Always redraw the title when drawing components
+    if (windowTitle != nil && [windowTitle length] > 0)
+    {
+        XCBWindow *rootWindow = [parentWindow parentWindow];
+        XCBScreen *screen = [rootWindow screen];
+        XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
+        [visual setVisualTypeForScreen:screen];
+        
+        CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
+        XCBColor black = XCBMakeColor(0,0,0,1);
+        [drawer drawText:windowTitle withColor:black];
+        
+        drawer = nil;
+        screen = nil;
+        visual = nil;
+        rootWindow = nil;
+    }
+    
+    // Draw buttons
+    if (hideWindowButton != nil)
+    {
+        XCBRect area = [hideWindowButton windowRect];
+        area.position.x = 0;
+        area.position.y = 0;
+        [hideWindowButton drawArea:area];
+    }
+    
+    if (maximizeWindowButton != nil)
+    {
+        XCBRect area = [maximizeWindowButton windowRect];
+        area.position.x = 0;
+        area.position.y = 0;
+        [maximizeWindowButton drawArea:area];
+    }
+    
+    if (minimizeWindowButton != nil)
+    {
+        XCBRect area = [minimizeWindowButton windowRect];
+        area.position.x = 0;
+        area.position.y = 0;
+        [minimizeWindowButton drawArea:area];
+    }
 }
 
 - (void) drawTitleBarComponentsPixmaps
@@ -354,15 +394,23 @@
 
 - (void) setWindowTitle:(NSString *) title
 {
-    if (titleIsSet)
-        return;
-
-    windowTitle = title;
-
-    if ([title length] == 0)
+    NSLog(@"=== TITLE DEBUG: Setting window title: '%@' ===", title);
+    
+    // CRITICAL FIX: Don't return early if titleIsSet - allow title updates
+    // The original code had: if (titleIsSet) return;
+    // This prevented title updates after the initial render
+    
+    // CRITICAL FIX: Properly handle nil titles
+    if (title == nil || [title length] == 0)
     {
         NSLog(@"No title to set to the window.");
-        return;
+        // Don't return here - we should still clear any existing title
+        windowTitle = @""; // Set to empty string instead of leaving as nil
+    }
+    else 
+    {
+        // CRITICAL FIX: Properly retain the title string
+        windowTitle = [title copy]; // Use copy to ensure we own the string
     }
 
     XCBWindow *rootWindow = [parentWindow parentWindow];
@@ -370,11 +418,27 @@
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
     [visual setVisualTypeForScreen:screen];
     
-    CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
-    XCBColor black = XCBMakeColor(0,0,0,1);
-    [drawer drawText:windowTitle withColor:black];
-    titleIsSet = YES;
+    NSLog(@"=== TITLE RENDER DEBUG: About to create CairoDrawer, window size: %fx%f ===", 
+          (double)[self windowRect].size.width, (double)[self windowRect].size.height);
     
+    CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
+    
+    // CRITICAL FIX: Only draw text if we have a valid title
+    if (windowTitle != nil && [windowTitle length] > 0)
+    {
+        XCBColor black = XCBMakeColor(0,0,0,1);
+        NSLog(@"=== TITLE RENDER DEBUG: About to call drawText with title: '%@' ===", windowTitle);
+        [drawer drawText:windowTitle withColor:black];
+        NSLog(@"=== TITLE RENDER DEBUG: drawText completed ===");
+        titleIsSet = YES;
+    }
+    else
+    {
+        NSLog(@"=== TITLE RENDER DEBUG: Skipping drawText - no valid title ===");
+        titleIsSet = NO;
+    }
+    
+    // Clean up
     drawer = nil;
     screen = nil;
     visual = nil;
@@ -397,7 +461,7 @@
     minimizeWindowButton = nil;
     maximizeWindowButton = nil;
     ewmhService = nil;
+    windowTitle = nil; // CRITICAL FIX: Clean up windowTitle
 }
-
 
 @end
