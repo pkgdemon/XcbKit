@@ -105,35 +105,49 @@ static inline void free_callback(void *data)
 
     cr = cairo_create(cairoSurface);
     
-    // For a more macOS-like appearance, use a simpler gradient
-    CGFloat xPosition = (CGFloat) width / 2;
-    CGFloat yPosition = (CGFloat) height / 2;
-    CGFloat radius = (CGFloat) height / 2.0 - 0.5; // Slightly smaller for cleaner edges
+    // Enable antialiasing
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
     
-    // Create a radial gradient for a more 3D effect like macOS
+    // Clear the surface first with transparency
+    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    
+    CGFloat xPosition = (CGFloat) width / 2.0;
+    CGFloat yPosition = (CGFloat) height / 2.0;
+    CGFloat radius = 6.0; // Slightly smaller than half to avoid edge clipping
+    
+    // Draw the main button circle with gradient
     cairo_pattern_t *pat = cairo_pattern_create_radial(
-        xPosition - radius/3, yPosition - radius/3, radius/10,  // Inner circle (highlight)
-        xPosition, yPosition, radius                            // Outer circle
+        xPosition - radius/4, yPosition - radius/4, radius/8,
+        xPosition, yPosition, radius
     );
     
-    // Add gradient stops for a subtle 3D effect
-    cairo_pattern_add_color_stop_rgb(pat, 0.0, 
-        buttonColor.redComponent * 1.2,  // Slightly brighter at center
-        buttonColor.greenComponent * 1.2, 
-        buttonColor.blueComponent * 1.2);
-    cairo_pattern_add_color_stop_rgb(pat, 1.0, 
-        buttonColor.redComponent * 0.9,  // Slightly darker at edges
-        buttonColor.greenComponent * 0.9, 
-        buttonColor.blueComponent * 0.9);
+    // Lighter color at top-left (highlight)
+    cairo_pattern_add_color_stop_rgb(pat, 0.0,
+        fmin(buttonColor.redComponent * 1.3, 1.0),
+        fmin(buttonColor.greenComponent * 1.3, 1.0),
+        fmin(buttonColor.blueComponent * 1.3, 1.0));
+    
+    // Base color
+    cairo_pattern_add_color_stop_rgb(pat, 0.5,
+        buttonColor.redComponent,
+        buttonColor.greenComponent,
+        buttonColor.blueComponent);
+    
+    // Darker at edges
+    cairo_pattern_add_color_stop_rgb(pat, 1.0,
+        buttonColor.redComponent * 0.85,
+        buttonColor.greenComponent * 0.85,
+        buttonColor.blueComponent * 0.85);
     
     cairo_set_source(cr, pat);
     cairo_arc(cr, xPosition, yPosition, radius, 0, 2 * M_PI);
-    cairo_fill(cr);
+    cairo_fill_preserve(cr);
     
-    // Optional: Add a subtle border
-    cairo_set_line_width(cr, 0.5);
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.3); // Semi-transparent black border
-    cairo_arc(cr, xPosition, yPosition, radius, 0, 2 * M_PI);
+    // Add a subtle border for definition
+    cairo_set_line_width(cr, 0.75);
+    cairo_set_source_rgba(cr, 0, 0, 0, 0.2);
     cairo_stroke(cr);
     
     cairo_surface_flush(cairoSurface);
