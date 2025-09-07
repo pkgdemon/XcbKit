@@ -94,55 +94,50 @@ static inline void free_callback(void *data)
     return self;
 }
 
-- (void) drawTitleBarButtonWithColor:(XCBColor)buttonColor withStopColor:(XCBColor)stopColor
+- (void) drawTitleBarButtonWithColor:(XCBColor) buttonColor withStopColor:(XCBColor) stopColor
 {
     XCBTitleBar *titleBar = (XCBTitleBar*)[window parentWindow];
 
     if (CmXCBColorAreEquals(buttonColor, [titleBar titleBarDownColor]))
         cairoSurface = cairo_xcb_surface_create([connection connection], [window dPixmap], [visual visualType], width, height);
-
-    if (!CmXCBColorAreEquals(buttonColor, [titleBar titleBarDownColor]))
+    else
         cairoSurface = cairo_xcb_surface_create([connection connection], [window pixmap], [visual visualType], width, height);
 
     cr = cairo_create(cairoSurface);
     
-    cairo_set_source_rgb(cr, buttonColor.redComponent, buttonColor.greenComponent, buttonColor.blueComponent);
-    
-    CGFloat startXPosition = 2;
-    CGFloat endXPosition = 2;
-    CGFloat startYPosition = 2; /// it was 1 previously, just try it for a bit!
-    CGFloat endYPosition = height + 2;
-    
-    CGFloat stopGradientOffset = 0.9;
-    CGFloat colorGradientOffset = 0.1;
-    
-    cairo_pattern_t *pat = cairo_pattern_create_linear(startXPosition, startYPosition, endXPosition, endYPosition);
-    
-    cairo_pattern_add_color_stop_rgb(pat, stopGradientOffset, stopColor.redComponent, stopColor.greenComponent, stopColor.blueComponent);
-    cairo_pattern_add_color_stop_rgb(pat, colorGradientOffset, buttonColor.redComponent, buttonColor.greenComponent, buttonColor.blueComponent);
-    cairo_pattern_add_color_stop_rgb(pat, stopGradientOffset, stopColor.redComponent, stopColor.greenComponent, stopColor.blueComponent);
-    
-    cairo_set_source(cr, pat);
-    
+    // For a more macOS-like appearance, use a simpler gradient
     CGFloat xPosition = (CGFloat) width / 2;
     CGFloat yPosition = (CGFloat) height / 2;
-    CGFloat radius = (CGFloat) height / 2.0 + 1; /* 1 solves a bad looking problem about circular window */
+    CGFloat radius = (CGFloat) height / 2.0 - 0.5; // Slightly smaller for cleaner edges
     
-    cairo_arc (cr, xPosition, yPosition, radius, 0  * (M_PI / 180.0), 360 * (M_PI / 180.0));
+    // Create a radial gradient for a more 3D effect like macOS
+    cairo_pattern_t *pat = cairo_pattern_create_radial(
+        xPosition - radius/3, yPosition - radius/3, radius/10,  // Inner circle (highlight)
+        xPosition, yPosition, radius                            // Outer circle
+    );
+    
+    // Add gradient stops for a subtle 3D effect
+    cairo_pattern_add_color_stop_rgb(pat, 0.0, 
+        buttonColor.redComponent * 1.2,  // Slightly brighter at center
+        buttonColor.greenComponent * 1.2, 
+        buttonColor.blueComponent * 1.2);
+    cairo_pattern_add_color_stop_rgb(pat, 1.0, 
+        buttonColor.redComponent * 0.9,  // Slightly darker at edges
+        buttonColor.greenComponent * 0.9, 
+        buttonColor.blueComponent * 0.9);
+    
+    cairo_set_source(cr, pat);
+    cairo_arc(cr, xPosition, yPosition, radius, 0, 2 * M_PI);
     cairo_fill(cr);
     
-    cairo_surface_flush(cairoSurface);
-
-    cairo_set_line_width (cr, 0.2);
-
-    cairo_arc (cr, xPosition, yPosition, radius, 0  * (M_PI / 180.0), 360 * (M_PI / 180.0));
-    
-    cairo_set_source_rgb(cr, buttonColor.redComponent, buttonColor.greenComponent, buttonColor.blueComponent);
+    // Optional: Add a subtle border
+    cairo_set_line_width(cr, 0.5);
+    cairo_set_source_rgba(cr, 0, 0, 0, 0.3); // Semi-transparent black border
+    cairo_arc(cr, xPosition, yPosition, radius, 0, 2 * M_PI);
     cairo_stroke(cr);
+    
     cairo_surface_flush(cairoSurface);
-    
     cairo_pattern_destroy(pat);
-    
     cairo_surface_destroy(cairoSurface);
     cairo_destroy(cr);
 

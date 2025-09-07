@@ -51,7 +51,6 @@
     XCBWindow *rootWindow = [parentWindow parentWindow];
     XCBScreen *scr = [rootWindow screen];
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[scr screen]->root_visual];
-    NSBundle *thisBundle = [NSBundle bundleForClass:[self class]];
     [visual setVisualTypeForScreen:scr];
     XCBRect area;
 
@@ -59,7 +58,7 @@
     
     if (hideWindowButton != nil)
     {
-        NSString* path = [thisBundle pathForResource:@"close" ofType:@"png"];
+        // REMOVE THE PNG LOADING - just draw the colored circle
         drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:hideWindowButton visual:visual];
 
         area = [hideWindowButton windowRect];
@@ -69,15 +68,14 @@
         [hideWindowButton clearArea:area generatesExposure:NO];
 
         [drawer drawTitleBarButtonWithColor:aColor == TitleBarUpColor ? hideButtonColor : titleBarDownColor withStopColor:stopColor];
-        [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
+        // COMMENT OUT OR REMOVE THIS LINE:
+        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
 
         drawer = nil;
-        path= nil;
     }
     
     if (minimizeWindowButton != nil)
     {
-        NSString* path = [thisBundle pathForResource:@"min" ofType:@"png"];
         drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:minimizeWindowButton visual:visual];
 
         area = [minimizeWindowButton windowRect];
@@ -86,15 +84,14 @@
         [minimizeWindowButton clearArea:area generatesExposure:NO];
 
         [drawer drawTitleBarButtonWithColor: aColor == TitleBarUpColor ? minimizeButtonColor : titleBarDownColor  withStopColor:stopColor];
-        [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
+        // COMMENT OUT OR REMOVE THIS LINE:
+        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
 
         drawer = nil;
-        path = nil;
     }
     
     if (maximizeWindowButton != nil)
     {
-        NSString* path = [thisBundle pathForResource:@"max" ofType:@"png"];
         drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:maximizeWindowButton visual:visual];
 
         area = [maximizeWindowButton windowRect];
@@ -103,16 +100,15 @@
         [maximizeWindowButton clearArea:area generatesExposure:NO];
 
         [drawer drawTitleBarButtonWithColor: aColor == TitleBarUpColor ? maximizeButtonColor : titleBarDownColor  withStopColor:stopColor];
-        [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
+        // COMMENT OUT OR REMOVE THIS LINE:
+        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
 
-        path = nil;
         drawer = nil;
     }
     
     scr = nil;
     visual = nil;
     rootWindow = nil;
-    thisBundle = nil;
 }
 
 - (void) drawTitleBarForColor:(TitleBarColor)aColor

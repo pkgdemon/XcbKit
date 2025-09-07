@@ -35,31 +35,31 @@
 
 - (XCBColor)buttonCloseColor {
     @try {
-        NSColor *color = [[NSColor redColor] highlightWithLevel:0.2];
-        return [self xcbColorFromNSColor:color];
+        // macOS-like red color
+        return XCBMakeColor(0.97, 0.26, 0.23, 1.0);
     }
     @catch (NSException *exception) {
-        return XCBMakeColor(0.411, 0.176, 0.673, 1);
+        return XCBMakeColor(0.97, 0.26, 0.23, 1.0);
     }
 }
 
 - (XCBColor)buttonMinimizeColor {
     @try {
-        NSColor *color = [[NSColor yellowColor] highlightWithLevel:0.1];
-        return [self xcbColorFromNSColor:color];
+        // macOS-like yellow color
+        return XCBMakeColor(0.9, 0.7, 0.3, 1.0);
     }
     @catch (NSException *exception) {
-        return XCBMakeColor(0.9, 0.7, 0.3, 1);
+        return XCBMakeColor(0.9, 0.7, 0.3, 1.0);
     }
 }
 
 - (XCBColor)buttonMaximizeColor {
     @try {
-        NSColor *color = [[NSColor greenColor] highlightWithLevel:0.1];
-        return [self xcbColorFromNSColor:color];
+        // macOS-like green color
+        return XCBMakeColor(0.322, 0.778, 0.244, 1.0);
     }
     @catch (NSException *exception) {
-        return XCBMakeColor(0, 0.74, 1, 1);
+        return XCBMakeColor(0.322, 0.778, 0.244, 1.0);
     }
 }
 
