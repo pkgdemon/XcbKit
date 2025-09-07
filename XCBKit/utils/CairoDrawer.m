@@ -108,15 +108,18 @@ static inline void free_callback(void *data)
     // Enable antialiasing
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
     
-    // Clear the surface first with transparency
-    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    // First, fill the entire area with the title bar background color
+    XCBColor titleBarColor = (CmXCBColorAreEquals(buttonColor, [titleBar titleBarDownColor])) 
+        ? [titleBar titleBarDownColor] 
+        : [titleBar titleBarUpColor];
+    cairo_set_source_rgb(cr, titleBarColor.redComponent, titleBarColor.greenComponent, titleBarColor.blueComponent);
     cairo_paint(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
     
+    // Now draw the button circle on top
     CGFloat xPosition = (CGFloat) width / 2.0;
     CGFloat yPosition = (CGFloat) height / 2.0;
-    CGFloat radius = 6.0; // Slightly smaller than half to avoid edge clipping
-    
+    CGFloat radius = 6.0;
+
     // Draw the main button circle with gradient
     cairo_pattern_t *pat = cairo_pattern_create_radial(
         xPosition - radius/4, yPosition - radius/4, radius/8,
