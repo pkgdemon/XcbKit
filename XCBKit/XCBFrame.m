@@ -11,6 +11,7 @@
 #import "services/ICCCMService.h"
 #import "services/TitleBarSettingsService.h"
 #import "utils/CairoDrawer.h"
+#import <xcb/xcb_aux.h>
 
 
 @implementation XCBFrame
@@ -138,6 +139,10 @@
     TitleBarSettingsService *settings = [TitleBarSettingsService sharedInstance];
     uint16_t height = [settings heightDefined] ? [settings height] : [settings defaultHeight];
 
+    // Define resize bar height
+    #define RESIZE_BAR_HEIGHT 9
+
+    // Create title bar
     XCBCreateWindowTypeRequest* request = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBTitleBarRequest];
     [request setDepth:XCB_COPY_FROM_PARENT];
     [request setParentWindow:self];
@@ -218,8 +223,7 @@
     [titleBar putWindowBackgroundWithPixmap:[titleBar pixmap]];
     [titleBar putButtonsBackgroundPixmaps:YES];
 
-    // CRITICAL FIX: Set and draw the title RIGHT HERE, immediately after pixmaps are ready
-    // but BEFORE mapping the window
+    // Set and draw the title
     [titleBar setWindowTitle:windowTitle];
     
     // Force immediate drawing to both pixmaps while they're fresh
@@ -257,12 +261,56 @@
         rootWindow = nil;
     }
 
+    // Create resize bar at the bottom
+    uint32_t resizeValues[2];
+    resizeValues[0] = [scr screen]->white_pixel;
+    resizeValues[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | 
+                      XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION |
+                      XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW;
+
+    XCBCreateWindowTypeRequest* resizeRequest = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBWindowRequest];
+    [resizeRequest setDepth:XCB_COPY_FROM_PARENT];
+    [resizeRequest setParentWindow:self];
+    [resizeRequest setXPosition:0];
+    [resizeRequest setYPosition:[self windowRect].size.height - RESIZE_BAR_HEIGHT];
+    [resizeRequest setWidth:[self windowRect].size.width];
+    [resizeRequest setHeight:RESIZE_BAR_HEIGHT];
+    [resizeRequest setBorderWidth:0];
+    [resizeRequest setXcbClass:XCB_WINDOW_CLASS_INPUT_OUTPUT];
+    [resizeRequest setVisual:rootVisual];
+    [resizeRequest setValueMask:mask];
+    [resizeRequest setValueList:resizeValues];
+
+    XCBWindowTypeResponse* resizeResponse = [[super connection] createWindowForRequest:resizeRequest registerWindow:YES];
+    XCBWindow *resizeBar = [resizeResponse window];
+    [resizeBar setCanMove:NO];
+    [self addChildWindow:resizeBar withKey:ResizeBar];
+    
+    // Map the resize bar
+    [connection mapWindow:resizeBar];
+    [resizeBar onScreen];
+    [resizeBar updateAttributes];
+    [resizeBar createPixmap];
+
     [clientWindow setDecorated:YES];
     [clientWindow setWindowBorderWidth:0];
     [connection mapWindow:titleBar];
 
+    // Adjust client window position and size to account for both title bar and resize bar
     XCBPoint position = XCBMakePoint(0, height - 1);
     [connection reparentWindow:clientWindow toWindow:self position:position];
+    
+    // Configure client window height to account for resize bar
+    uint32_t clientHeight = [self windowRect].size.height - height - RESIZE_BAR_HEIGHT;
+    uint32_t configValues[] = {clientHeight};
+    xcb_configure_window([connection connection], [clientWindow window], XCB_CONFIG_WINDOW_HEIGHT, configValues);
+    
+    // Update client window rect
+    XCBRect clientRect = [clientWindow windowRect];
+    clientRect.size.height = clientHeight;
+    [clientWindow setWindowRect:clientRect];
+    [clientWindow setOriginalRect:clientRect];
+    
     [connection mapWindow:clientWindow];
     uint32_t border[] = {0};
     xcb_configure_window([connection connection], [clientWindow window], XCB_CONFIG_WINDOW_BORDER_WIDTH, border);
@@ -275,6 +323,9 @@
     scr = nil;
     rootVisual = nil;
     settings = nil;
+    resizeBar = nil;
+    resizeRequest = nil;
+    resizeResponse = nil;
 }
 
 /*** performance while resizing pixel by pixel is critical so we do everything we can to improve it also if the message signature looks bad ***/
@@ -472,47 +523,57 @@ void resizeFromBottomForEvent(xcb_motion_notify_event_t *anEvent,
                               uint16_t titleBarHeight)
 {
     XCBWindow* clientWindow = [frame childWindowForKey:ClientWindow];
-    //xcb_connection_t *connection = [[frame connection] connection];
-
+    XCBWindow* resizeBar = [frame childWindowForKey:ResizeBar];
+    
     XCBRect rect = [frame windowRect];
     XCBRect clientRect = [clientWindow windowRect];
 
     uint32_t values[] = {anEvent->event_y};
 
-    if (rect.size.height <= minH + titleBarHeight && anEvent->event_y < minH)
+    if (rect.size.height <= minH + titleBarHeight + RESIZE_BAR_HEIGHT && anEvent->event_y < minH)
     {
-        rect.size.height = minH + titleBarHeight;
+        rect.size.height = minH + titleBarHeight + RESIZE_BAR_HEIGHT;
         clientRect.size.height = minH;
         values[0] = clientRect.size.height;
         xcb_configure_window(connection, [clientWindow window], XCB_CONFIG_WINDOW_HEIGHT, &values);
         values[0] = rect.size.height;
         xcb_configure_window(connection, [frame window], XCB_CONFIG_WINDOW_HEIGHT, &values);
+        
+        // Move resize bar to new bottom position
+        values[0] = rect.size.height - RESIZE_BAR_HEIGHT;
+        xcb_configure_window(connection, [resizeBar window], XCB_CONFIG_WINDOW_Y, &values);
 
         [frame setWindowRect:rect];
         [frame setOriginalRect:rect];
-
         [clientWindow setWindowRect:clientRect];
         [clientWindow setOriginalRect:clientRect];
 
         clientWindow = nil;
+        resizeBar = nil;
         connection = NULL;
         return;
     }
 
-    values[0] = anEvent->event_y - titleBarHeight;
+    values[0] = anEvent->event_y - titleBarHeight - RESIZE_BAR_HEIGHT;
     xcb_configure_window(connection, [clientWindow window], XCB_CONFIG_WINDOW_HEIGHT, &values);
     clientRect.size.height = values[0];
+    
     values[0] = anEvent->event_y;
     xcb_configure_window(connection, [frame window], XCB_CONFIG_WINDOW_HEIGHT, &values);
+    
+    // Move resize bar to new bottom position
+    values[0] = anEvent->event_y - RESIZE_BAR_HEIGHT;
+    xcb_configure_window(connection, [resizeBar window], XCB_CONFIG_WINDOW_Y, &values);
+    
     [clientWindow setWindowRect:clientRect];
     [clientWindow setOriginalRect:clientRect];
 
-
-    rect.size.height = values[0];
+    rect.size.height = anEvent->event_y;
     [frame setWindowRect:rect];
     [frame setOriginalRect:rect];
 
     clientWindow = nil;
+    resizeBar = nil;
     connection = NULL;
 }
 

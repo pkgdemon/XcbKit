@@ -20,6 +20,8 @@
 #import <enums/EIcccm.h>
 #import "services/TitleBarSettingsService.h"
 
+#define RESIZE_BAR_HEIGHT 9
+
 @implementation XCBConnection
 
 @synthesize dragState;
@@ -703,8 +705,8 @@ static XCBConnection *sharedInstance;
     [request setXPosition:[window windowRect].position.x];
     [request setYPosition:[window windowRect].position.y];
     [request setWidth:[window windowRect].size.width + 1];
-    [request setHeight:[window windowRect].size.height + titleHeight];
-    [request setBorderWidth:3];
+    [request setHeight:[window windowRect].size.height + titleHeight + RESIZE_BAR_HEIGHT];
+    [request setBorderWidth:0];
     [request setXcbClass:XCB_WINDOW_CLASS_INPUT_OUTPUT];
     [request setVisual:visual];
     [request setValueMask:XCB_CW_BACK_PIXEL /*| XCB_CW_BACKING_STORE*/ | XCB_CW_EVENT_MASK];
@@ -1323,10 +1325,19 @@ static XCBConnection *sharedInstance;
     NSLog(@"Enter notify for window: %u", anEvent->event);
     XCBWindow *window = [self windowForXCBId:anEvent->event];
 
-    if ([window isKindOfClass:[XCBWindow class]] &&
-        [[window parentWindow] isKindOfClass:[XCBFrame class]])
-    {
-        [window grabButton];
+    XCBWindow *resizeBar = nil;
+    if ([window isKindOfClass:[XCBWindow class]] && 
+        [[window parentWindow] isKindOfClass:[XCBFrame class]]) {
+        XCBFrame *parentFrame = (XCBFrame *)[window parentWindow];
+        resizeBar = [parentFrame childWindowForKey:ResizeBar];
+    
+        if (window == resizeBar) {
+            resizeState = YES;
+            dragState = NO;
+            [parentFrame setBottomBorderClicked:YES];
+            [window grabPointer];
+            return;
+        }
     }
 
     if ([window isKindOfClass:[XCBFrame class]])
@@ -1396,12 +1407,26 @@ static XCBConnection *sharedInstance;
     XCBWindow *window = [self windowForXCBId:anEvent->window];
     [window onScreen];
     XCBTitleBar *titleBar;
-    XCBFrame *frame; //??
+    XCBFrame *frame;
     XCBRect area;
     XCBPoint position;
     XCBSize size;
 
     //NSLog(@"EXPOSE EVENT FOR WINDOW: %u of kind: %@", [window window], NSStringFromClass([window class]));
+
+    // Check if this is a resize bar
+    if ([window parentWindow] && [[window parentWindow] isKindOfClass:[XCBFrame class]]) {
+        XCBFrame *parentFrame = (XCBFrame *)[window parentWindow];
+        if (window == [parentFrame childWindowForKey:ResizeBar]) {
+            // Draw resize bar with gradient
+            CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:self window:window];
+            XCBColor topColor = XCBMakeColor(0.85, 0.85, 0.85, 1.0);
+            XCBColor bottomColor = XCBMakeColor(0.65, 0.65, 0.65, 1.0);
+            [drawer drawWindowWithColor:topColor andStopColor:bottomColor];
+            drawer = nil;
+            parentFrame = nil;
+        }
+    }
 
     /*if ([window isKindOfClass:[XCBWindow class]] && [[window parentWindow] isKindOfClass:[XCBFrame class]])
     {
