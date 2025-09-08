@@ -1,5 +1,10 @@
 #import "XCBThemeService.h"
+
+// Suppress the typedef redefinition warning from GNUstep headers
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wtypedef-redefinition"
 #import <AppKit/AppKit.h>
+#pragma clang diagnostic pop
 
 @implementation XCBThemeService
 
