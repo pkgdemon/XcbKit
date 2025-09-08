@@ -171,7 +171,7 @@
     
     // Quick attempts - only try 5 times with minimal delay
     int attempts = 0;
-    int maxAttempts = 5; // 5 * 1ms = 5ms max wait
+    int maxAttempts = 5;
     
     while (attempts < maxAttempts) {
         // Try EWMH first
@@ -201,7 +201,6 @@
             }
         }
         
-        // Very short wait and process events
         usleep(1000); // 1ms
         [connection flush];
         attempts++;
@@ -261,46 +260,19 @@
         rootWindow = nil;
     }
 
-    // Create resize bar at the bottom
-    uint32_t resizeValues[2];
-    resizeValues[0] = [scr screen]->white_pixel;
-    resizeValues[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | 
-                      XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION |
-                      XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW;
-
-    XCBCreateWindowTypeRequest* resizeRequest = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBWindowRequest];
-    [resizeRequest setDepth:XCB_COPY_FROM_PARENT];
-    [resizeRequest setParentWindow:self];
-    [resizeRequest setXPosition:0];
-    [resizeRequest setYPosition:[self windowRect].size.height - RESIZE_BAR_HEIGHT];
-    [resizeRequest setWidth:[self windowRect].size.width];
-    [resizeRequest setHeight:RESIZE_BAR_HEIGHT];
-    [resizeRequest setBorderWidth:0];
-    [resizeRequest setXcbClass:XCB_WINDOW_CLASS_INPUT_OUTPUT];
-    [resizeRequest setVisual:rootVisual];
-    [resizeRequest setValueMask:mask];
-    [resizeRequest setValueList:resizeValues];
-
-    XCBWindowTypeResponse* resizeResponse = [[super connection] createWindowForRequest:resizeRequest registerWindow:YES];
-    XCBWindow *resizeBar = [resizeResponse window];
-    [resizeBar setCanMove:NO];
-    [self addChildWindow:resizeBar withKey:ResizeBar];
-    
-    // Map the resize bar
-    [connection mapWindow:resizeBar];
-    [resizeBar onScreen];
-    [resizeBar updateAttributes];
-    [resizeBar createPixmap];
+    // DON'T create a separate resize bar window - we'll handle it in the frame itself
+    // Just remove the ResizeBar from children if it exists
+    [self removeChild:ResizeBar];
 
     [clientWindow setDecorated:YES];
     [clientWindow setWindowBorderWidth:0];
     [connection mapWindow:titleBar];
 
-    // Adjust client window position and size to account for both title bar and resize bar
+    // Adjust client window position and size to account for both title bar and resize bar space
     XCBPoint position = XCBMakePoint(0, height - 1);
     [connection reparentWindow:clientWindow toWindow:self position:position];
     
-    // Configure client window height to account for resize bar
+    // Configure client window height to account for resize bar space
     uint32_t clientHeight = [self windowRect].size.height - height - RESIZE_BAR_HEIGHT;
     uint32_t configValues[] = {clientHeight};
     xcb_configure_window([connection connection], [clientWindow window], XCB_CONFIG_WINDOW_HEIGHT, configValues);
@@ -323,9 +295,6 @@
     scr = nil;
     rootVisual = nil;
     settings = nil;
-    resizeBar = nil;
-    resizeRequest = nil;
-    resizeResponse = nil;
 }
 
 /*** performance while resizing pixel by pixel is critical so we do everything we can to improve it also if the message signature looks bad ***/
@@ -523,7 +492,7 @@ void resizeFromBottomForEvent(xcb_motion_notify_event_t *anEvent,
                               uint16_t titleBarHeight)
 {
     XCBWindow* clientWindow = [frame childWindowForKey:ClientWindow];
-    XCBWindow* resizeBar = [frame childWindowForKey:ResizeBar];
+    // Remove resize bar reference
     
     XCBRect rect = [frame windowRect];
     XCBRect clientRect = [clientWindow windowRect];
@@ -539,17 +508,12 @@ void resizeFromBottomForEvent(xcb_motion_notify_event_t *anEvent,
         values[0] = rect.size.height;
         xcb_configure_window(connection, [frame window], XCB_CONFIG_WINDOW_HEIGHT, &values);
         
-        // Move resize bar to new bottom position
-        values[0] = rect.size.height - RESIZE_BAR_HEIGHT;
-        xcb_configure_window(connection, [resizeBar window], XCB_CONFIG_WINDOW_Y, &values);
-
         [frame setWindowRect:rect];
         [frame setOriginalRect:rect];
         [clientWindow setWindowRect:clientRect];
         [clientWindow setOriginalRect:clientRect];
 
         clientWindow = nil;
-        resizeBar = nil;
         connection = NULL;
         return;
     }
@@ -561,9 +525,7 @@ void resizeFromBottomForEvent(xcb_motion_notify_event_t *anEvent,
     values[0] = anEvent->event_y;
     xcb_configure_window(connection, [frame window], XCB_CONFIG_WINDOW_HEIGHT, &values);
     
-    // Move resize bar to new bottom position
-    values[0] = anEvent->event_y - RESIZE_BAR_HEIGHT;
-    xcb_configure_window(connection, [resizeBar window], XCB_CONFIG_WINDOW_Y, &values);
+    // No need to move resize bar anymore!
     
     [clientWindow setWindowRect:clientRect];
     [clientWindow setOriginalRect:clientRect];
@@ -573,7 +535,6 @@ void resizeFromBottomForEvent(xcb_motion_notify_event_t *anEvent,
     [frame setOriginalRect:rect];
 
     clientWindow = nil;
-    resizeBar = nil;
     connection = NULL;
 }
 
@@ -795,35 +756,30 @@ void resizeFromAngleForEvent(xcb_motion_notify_event_t *anEvent,
     int topBorder = [super windowRect].position.y;
     MousePosition position = None;
 
-    if (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x)
-    {
+    // Check if mouse is in resize bar area (bottom 9 pixels)
+    if (anEvent->event_y >= bottomBorder - RESIZE_BAR_HEIGHT) {
+        position = BottomBorder;
+        return position;
+    }
+
+    if (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x) {
         position = RightBorder;
     }
 
-
-    if (bottomBorder == anEvent->event_y || (bottomBorder - 3) < anEvent->event_y)
-    {
-        position = BottomBorder;
-    }
-
     if ((bottomBorder == anEvent->event_y || (bottomBorder - 3) < anEvent->event_y) &&
-        (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x))
-    {
+        (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x)) {
         position = BottomRightCorner;
     }
 
-    if (leftBorder == anEvent->root_x || (leftBorder + 3) > anEvent->root_x)
-    {
+    if (leftBorder == anEvent->root_x || (leftBorder + 3) > anEvent->root_x) {
         position = LeftBorder;
     }
 
-    if (topBorder == anEvent->root_y || (topBorder + 3) > anEvent->root_y)
-    {
+    if (topBorder == anEvent->root_y || (topBorder + 3) > anEvent->root_y) {
         position = TopBorder;
     }
 
     return position;
-
 }
 
 - (void) restoreDimensionAndPosition

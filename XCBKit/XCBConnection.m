@@ -1325,21 +1325,8 @@ static XCBConnection *sharedInstance;
     NSLog(@"Enter notify for window: %u", anEvent->event);
     XCBWindow *window = [self windowForXCBId:anEvent->event];
 
-    XCBWindow *resizeBar = nil;
-    if ([window isKindOfClass:[XCBWindow class]] && 
-        [[window parentWindow] isKindOfClass:[XCBFrame class]]) {
-        XCBFrame *parentFrame = (XCBFrame *)[window parentWindow];
-        resizeBar = [parentFrame childWindowForKey:ResizeBar];
+    // Remove the resize bar specific handling since it's no longer a separate window
     
-        if (window == resizeBar) {
-            resizeState = YES;
-            dragState = NO;
-            [parentFrame setBottomBorderClicked:YES];
-            [window grabPointer];
-            return;
-        }
-    }
-
     if ([window isKindOfClass:[XCBFrame class]])
     {
         XCBFrame *frameWindow = (XCBFrame *) window;
@@ -1412,32 +1399,53 @@ static XCBConnection *sharedInstance;
     XCBPoint position;
     XCBSize size;
 
-    //NSLog(@"EXPOSE EVENT FOR WINDOW: %u of kind: %@", [window window], NSStringFromClass([window class]));
-
-    // Check if this is a resize bar
-    if ([window parentWindow] && [[window parentWindow] isKindOfClass:[XCBFrame class]]) {
-        XCBFrame *parentFrame = (XCBFrame *)[window parentWindow];
-        if (window == [parentFrame childWindowForKey:ResizeBar]) {
-            // Draw resize bar with gradient
-            CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:self window:window];
-            XCBColor topColor = XCBMakeColor(0.85, 0.85, 0.85, 1.0);
-            XCBColor bottomColor = XCBMakeColor(0.65, 0.65, 0.65, 1.0);
-            [drawer drawWindowWithColor:topColor andStopColor:bottomColor];
+    // Check if this is a frame window that needs resize bar drawn
+    if ([window isKindOfClass:[XCBFrame class]]) {
+        frame = (XCBFrame *)window;
+        
+        // Draw resize bar area at the bottom of the frame
+        if (anEvent->y + anEvent->height >= [frame windowRect].size.height - RESIZE_BAR_HEIGHT) {
+            CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:self window:frame];
+            
+            // Create a temporary visual for drawing
+            XCBScreen *screen = [frame onScreen];
+            XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
+            [visual setVisualTypeForScreen:screen];
+            [drawer setVisual:visual];
+            
+            // Draw the resize bar gradient directly on the frame window
+            cairo_surface_t *surface = cairo_xcb_surface_create([self connection], 
+                                                               [frame window], 
+                                                               [visual visualType], 
+                                                               [frame windowRect].size.width, 
+                                                               [frame windowRect].size.height);
+            cairo_t *cr = cairo_create(surface);
+            
+            // Draw gradient for resize bar area
+            cairo_pattern_t *pat = cairo_pattern_create_linear(0, 
+                                                              [frame windowRect].size.height - RESIZE_BAR_HEIGHT,
+                                                              0, 
+                                                              [frame windowRect].size.height);
+            cairo_pattern_add_color_stop_rgb(pat, 0.0, 0.85, 0.85, 0.85);
+            cairo_pattern_add_color_stop_rgb(pat, 1.0, 0.65, 0.65, 0.65);
+            
+            cairo_rectangle(cr, 0, 
+                          [frame windowRect].size.height - RESIZE_BAR_HEIGHT, 
+                          [frame windowRect].size.width, 
+                          RESIZE_BAR_HEIGHT);
+            cairo_set_source(cr, pat);
+            cairo_fill(cr);
+            
+            cairo_pattern_destroy(pat);
+            cairo_surface_flush(surface);
+            cairo_surface_destroy(surface);
+            cairo_destroy(cr);
+            
             drawer = nil;
-            parentFrame = nil;
+            screen = nil;
+            visual = nil;
         }
     }
-
-    /*if ([window isKindOfClass:[XCBWindow class]] && [[window parentWindow] isKindOfClass:[XCBFrame class]])
-    {
-        //TODO: frame needs a pixmap too.
-        NSLog(@"EXPOSE EVENT FOR WINDOW: %u of kind: %@", [window window], NSStringFromClass([window class]));
-        frame = (XCBFrame*)window;
-        position = XCBMakePoint(anEvent->x, anEvent->y);
-        size = XCBMakeSize(anEvent->width, anEvent->height);
-        area = XCBMakeRect(position, size);
-        [window drawArea:area];
-    }*/
 
     if ([window isMaximizeButton])
     {
