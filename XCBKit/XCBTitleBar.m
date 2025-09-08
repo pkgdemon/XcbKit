@@ -387,7 +387,8 @@
     // This prevents multiple drawing calls during resize
 }
 
-- (void)drawTitleToPixmaps:(NSString*)title {
+// Fixed method name to match header declaration
+- (void)drawTextToPixmaps:(NSString*)title {
     XCBWindow *rootWindow = [parentWindow parentWindow];
     XCBScreen *screen = [rootWindow screen];
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
