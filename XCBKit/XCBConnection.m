@@ -1679,15 +1679,7 @@ static XCBConnection *sharedInstance;
 
 - (void)dealloc
 {
-    [screens removeAllObjects];
-    screens = nil;
-    [windowsMap removeAllObjects];
-    windowsMap = nil;
-    displayName = nil;
-    damagedRegions = nil;
-
     xcb_disconnect(connection);
-    icccmService = nil;
 }
 
 
