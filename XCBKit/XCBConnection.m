@@ -459,17 +459,6 @@ static XCBConnection *sharedInstance;
         return;
     }
 
-    if ([window decorated] && isManaged)
-    {
-        NSLog(@"Window with id %u already decorated", [window window]);
-
-        [self mapWindow:window];
-        window = nil;
-
-        ewmhService = nil;
-        return;
-    }
-
     if ([window decorated] == NO && !isManaged)
     {
         window = [[XCBWindow alloc] initWithXCBWindow:anEvent->window andConnection:self];
@@ -1577,8 +1566,6 @@ static XCBConnection *sharedInstance;
 {
     xcb_send_event(connection, propagating, [aWindow window], XCB_EVENT_MASK_STRUCTURE_NOTIFY, anEvent);
 }
-
-//TODO: tenere traccia del tempo per ogni evento.
 
 - (xcb_timestamp_t)currentTime
 {
