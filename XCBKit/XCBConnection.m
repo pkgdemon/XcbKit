@@ -572,8 +572,6 @@ static XCBConnection *sharedInstance;
                 free(windowTypeReply);
                 return;
             }
-
-            atom = NULL; //FIXME:is this malloc'd?
         }
 
         void *motifHints = [ewmhService getProperty:[ewmhService MotifWMHints]
@@ -1154,7 +1152,7 @@ static XCBConnection *sharedInstance;
     if ([window isKindOfClass:[XCBFrame class]])
     {
         frame = (XCBFrame *) [self windowForXCBId:anEvent->window];
-        titleBar = (XCBTitleBar *) [frame childWindowForKey:TitleBar]; //FIXME: just cast!
+        titleBar = (XCBTitleBar *) [frame childWindowForKey:TitleBar];
         clientWindow = [frame childWindowForKey:ClientWindow];
     }
     else if ([window isKindOfClass:[XCBTitleBar class]])
@@ -1165,8 +1163,6 @@ static XCBConnection *sharedInstance;
     }
     else if ([window isKindOfClass:[XCBWindow class]])
     {
-        window = [self windowForXCBId:anEvent->window]; // FIXME: ??????
-
         if ([window decorated])
         {
             frame = (XCBFrame *) [window parentWindow];
