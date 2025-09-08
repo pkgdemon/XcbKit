@@ -1045,6 +1045,12 @@ static XCBConnection *sharedInstance;
         xcb_allow_events(connection, XCB_ALLOW_REPLAY_POINTER, anEvent->time);
         frame = (XCBFrame *) window;
         clientWindow = [frame childWindowForKey:ClientWindow];
+        
+        // Check for resize BEFORE setting drag state
+        if ([[frame childWindowForKey:ClientWindow] canResize])
+        {
+            [self borderClickedForFrameWindow:frame withEvent:anEvent];
+        }
     }
 
     if ([window isKindOfClass:[XCBTitleBar class]])
@@ -1079,16 +1085,11 @@ static XCBConnection *sharedInstance;
 
     [frame setOffset:XCBMakePoint(anEvent->event_x, anEvent->event_y)];
 
-    if ([frame window] != anEvent->root && [[frame childWindowForKey:ClientWindow] canMove])
+    // Only set drag state if we're not resizing
+    if (!resizeState && [frame window] != anEvent->root && [[frame childWindowForKey:ClientWindow] canMove])
         dragState = YES;
     else
         dragState = NO;
-
-
-    /*** RESIZE WINDOW BY CLICKING ON THE BORDER ***/
-
-    if ([titleBar window] != anEvent->event && [[frame childWindowForKey:ClientWindow] canResize])
-        [self borderClickedForFrameWindow:frame withEvent:anEvent];
 
     frame = nil;
     window = nil;
@@ -1610,10 +1611,9 @@ static XCBConnection *sharedInstance;
 {
     int rightBorder = [aFrame windowRect].size.width;
     int bottomBorder = [aFrame windowRect].size.height;
-    int leftBorder = [aFrame windowRect].position.x;
-    int topBorder = [aFrame windowRect].position.y;
 
-    if (rightBorder == anEvent->event_x || (rightBorder - 1) < anEvent->event_x)
+    // Only check for bottom resize area since we removed borders
+    if (anEvent->event_y >= bottomBorder - RESIZE_BAR_HEIGHT)
     {
         if (![aFrame grabPointer])
         {
@@ -1623,66 +1623,18 @@ static XCBConnection *sharedInstance;
 
         resizeState = YES;
         dragState = NO;
-        [aFrame setRightBorderClicked:YES];
-    }
-
-    if (bottomBorder == anEvent->event_y || (bottomBorder - 1) < anEvent->event_y)
-    {
-        if (![aFrame grabPointer])
+        
+        // Check if also clicking near right edge for corner resize
+        if (anEvent->event_x >= rightBorder - 20)
         {
-            NSLog(@"Unable to grab the pointer");
-            return;
+            [aFrame setBottomBorderClicked:YES];
+            [aFrame setRightBorderClicked:YES];
         }
-
-        resizeState = YES;
-        dragState = NO;
-        [aFrame setBottomBorderClicked:YES];
-
-    }
-
-    if ((bottomBorder == anEvent->event_y || (bottomBorder - 1) < anEvent->event_y) &&
-        (rightBorder == anEvent->event_x || (rightBorder - 1) < anEvent->event_x))
-    {
-        if (![aFrame grabPointer])
+        else
         {
-            NSLog(@"Unable to grab the pointer");
-            return;
+            [aFrame setBottomBorderClicked:YES];
         }
-
-        resizeState = YES;
-        dragState = NO;
-        [aFrame setBottomBorderClicked:YES];
-        [aFrame setRightBorderClicked:YES];
     }
-
-    if (leftBorder == anEvent->root_x || (leftBorder + 3) > anEvent->root_x)
-    {
-        if (![aFrame grabPointer])
-        {
-            NSLog(@"Unable to grab the pointer");
-            return;
-        }
-
-        resizeState = YES;
-        dragState = NO;
-
-        [aFrame setLeftBorderClicked:YES];
-    }
-
-    if (topBorder == anEvent->root_y)
-    {
-        if (![aFrame grabPointer])
-        {
-            NSLog(@"Unable to grab the pointer");
-            return;
-        }
-
-        resizeState = YES;
-        dragState = NO;
-
-        [aFrame setTopBorderClicked:YES];
-    }
-
 }
 
 - (void)drawAllTitleBarsExcept:(XCBTitleBar *)aTitileBar

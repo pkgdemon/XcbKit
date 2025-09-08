@@ -752,31 +752,20 @@ void resizeFromAngleForEvent(xcb_motion_notify_event_t *anEvent,
 {
     int rightBorder = [super windowRect].size.width;
     int bottomBorder = [super windowRect].size.height;
-    int leftBorder = [super windowRect].position.x;
-    int topBorder = [super windowRect].position.y;
     MousePosition position = None;
 
-    // Check if mouse is in resize bar area (bottom 9 pixels)
-    if (anEvent->event_y >= bottomBorder - RESIZE_BAR_HEIGHT) {
-        position = BottomBorder;
-        return position;
-    }
-
-    if (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x) {
-        position = RightBorder;
-    }
-
-    if ((bottomBorder == anEvent->event_y || (bottomBorder - 3) < anEvent->event_y) &&
-        (rightBorder == anEvent->event_x || (rightBorder - 3) < anEvent->event_x)) {
-        position = BottomRightCorner;
-    }
-
-    if (leftBorder == anEvent->root_x || (leftBorder + 3) > anEvent->root_x) {
-        position = LeftBorder;
-    }
-
-    if (topBorder == anEvent->root_y || (topBorder + 3) > anEvent->root_y) {
-        position = TopBorder;
+    // Only check bottom area since that's our resize bar
+    if (anEvent->event_y >= bottomBorder - RESIZE_BAR_HEIGHT) 
+    {
+        // Check if near right corner for diagonal resize
+        if (anEvent->event_x >= rightBorder - 20) 
+        {
+            position = BottomRightCorner;
+        }
+        else 
+        {
+            position = BottomBorder;
+        }
     }
 
     return position;
