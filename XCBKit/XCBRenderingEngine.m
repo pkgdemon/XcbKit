@@ -1,6 +1,3 @@
-// XCBRenderingEngine.m
-// XCBKit
-
 #import "XCBRenderingEngine.h"
 #import "XCBTitleBar.h"
 #import "XCBFrame.h"
@@ -20,7 +17,6 @@ static XCBRenderingEngine *sharedInstance = nil;
 #pragma mark - Singleton
 
 + (instancetype)sharedEngine {
-    // Simple singleton without GCD
     if (sharedInstance == nil) {
         sharedInstance = [[XCBRenderingEngine alloc] init];
     }
@@ -44,23 +40,25 @@ static XCBRenderingEngine *sharedInstance = nil;
 #pragma mark - Title Bar Rendering
 
 - (void)renderTitleBarInternal:(XCBTitleBar *)titleBar {
-    if (!titleBar || !titleBar.connection || !titleBar.pixmap || !titleBar.dPixmap) {
+    if (!titleBar || !titleBar.connection) {
         NSLog(@"[XCBRenderingEngine] Invalid titleBar for rendering");
         return;
     }
     
-    // Get visual
+    if (!titleBar.pixmap || titleBar.pixmap == 0 || !titleBar.dPixmap || titleBar.dPixmap == 0) {
+        NSLog(@"[XCBRenderingEngine] Pixmaps not initialized for titleBar");
+        return;
+    }
+    
     XCBWindow *rootWindow = [titleBar.parentWindow parentWindow];
     XCBScreen *screen = [rootWindow screen];
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
     [visual setVisualTypeForScreen:screen];
     
-    // Get theme colors
     XCBThemeService *theme = [XCBThemeService sharedInstance];
     XCBColor activeColor = [theme titleBarActiveColor];
     XCBColor inactiveColor = [theme titleBarInactiveColor];
     
-    // Render to both pixmaps
     [self renderTitleBarToPixmap:titleBar.pixmap 
                        titleBar:titleBar 
                          visual:visual 
@@ -73,7 +71,6 @@ static XCBRenderingEngine *sharedInstance = nil;
                          active:NO 
                           color:inactiveColor];
     
-    // Mark as rendered
     titleBar.isRendered = YES;
 }
 
@@ -86,28 +83,24 @@ static XCBRenderingEngine *sharedInstance = nil;
     CGFloat width = titleBar.windowRect.size.width;
     CGFloat height = titleBar.windowRect.size.height;
     
-    // Create Cairo surface
     cairo_surface_t *surface = cairo_xcb_surface_create(
         [titleBar.connection connection],
         pixmap,
         [visual visualType],
         width,
-        height - 1  // Account for border
+        height - 1
     );
     
     cairo_t *cr = cairo_create(surface);
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
     
-    // Draw gradient background
     [self drawTitleBarGradient:cr width:width height:height color:color];
     
-    // Draw window title if set
     NSString *title = [titleBar windowTitle];
     if (title && [title length] > 0) {
         [self drawTitleText:title context:cr width:width height:height];
     }
     
-    // Clean up
     cairo_surface_flush(surface);
     cairo_destroy(cr);
     cairo_surface_destroy(surface);
@@ -118,16 +111,13 @@ static XCBRenderingEngine *sharedInstance = nil;
                       height:(CGFloat)height 
                        color:(XCBColor)color {
     
-    // Create gradient
     cairo_pattern_t *pat = cairo_pattern_create_linear(0, height, 0, 0);
     
-    // Lighter at top
     cairo_pattern_add_color_stop_rgb(pat, 0.2, 
         color.redComponent,
         color.greenComponent,
         color.blueComponent);
     
-    // Slightly darker at bottom for depth
     cairo_pattern_add_color_stop_rgb(pat, 0.99,
         color.redComponent * 0.93,
         color.greenComponent * 0.93,
@@ -147,24 +137,20 @@ static XCBRenderingEngine *sharedInstance = nil;
     
     if (!text || [text length] == 0) return;
     
-    // Set text color (black)
     cairo_set_source_rgb(cr, 0, 0, 0);
     
-    // Set font
     cairo_select_font_face(cr, "Serif", 
                           CAIRO_FONT_SLANT_NORMAL, 
                           CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, 11);
     
-    // Calculate text position (centered)
     cairo_text_extents_t extents;
     const char *utfString = [text UTF8String];
     cairo_text_extents(cr, utfString, &extents);
     
     CGFloat textX = (width - extents.width) / 2.0;
-    CGFloat textY = (height / 2.0) + 2;  // Slightly below center
+    CGFloat textY = (height / 2.0) + 2;
     
-    // Draw text
     cairo_move_to(cr, textX, textY);
     cairo_show_text(cr, utfString);
 }
@@ -172,8 +158,13 @@ static XCBRenderingEngine *sharedInstance = nil;
 #pragma mark - Button Rendering
 
 - (void)renderButtonInternal:(XCBWindow *)button active:(BOOL)active {
-    if (!button || !button.connection || !button.pixmap || !button.dPixmap) {
+    if (!button || !button.connection) {
         NSLog(@"[XCBRenderingEngine] Invalid button for rendering");
+        return;
+    }
+    
+    if (!button.pixmap || button.pixmap == 0 || !button.dPixmap || button.dPixmap == 0) {
+        NSLog(@"[XCBRenderingEngine] Pixmaps not initialized for button");
         return;
     }
     
@@ -183,7 +174,6 @@ static XCBRenderingEngine *sharedInstance = nil;
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
     [visual setVisualTypeForScreen:screen];
     
-    // Determine button color
     XCBThemeService *theme = [XCBThemeService sharedInstance];
     XCBColor buttonColor;
     
@@ -197,7 +187,6 @@ static XCBRenderingEngine *sharedInstance = nil;
         buttonColor = XCBMakeColor(0.5, 0.5, 0.5, 1.0);
     }
     
-    // Render to both pixmaps
     [self renderButtonToPixmap:button.pixmap 
                         button:button 
                         visual:visual 
@@ -209,7 +198,7 @@ static XCBRenderingEngine *sharedInstance = nil;
                         button:button 
                         visual:visual 
                         active:NO 
-                         color:titleBar.titleBarDownColor
+                         color:buttonColor
                     titleColor:titleBar.titleBarDownColor];
 }
 
@@ -234,19 +223,28 @@ static XCBRenderingEngine *sharedInstance = nil;
     cairo_t *cr = cairo_create(surface);
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
     
-    // Fill with title bar background color first
     cairo_set_source_rgb(cr, 
         titleBarColor.redComponent,
         titleBarColor.greenComponent,
         titleBarColor.blueComponent);
     cairo_paint(cr);
     
-    // Draw button circle
     if (active) {
         [self drawButtonCircle:cr 
                          width:width 
                         height:height 
                          color:buttonColor];
+    } else {
+        XCBColor dimmedColor = XCBMakeColor(
+            buttonColor.redComponent * 0.6,
+            buttonColor.greenComponent * 0.6,
+            buttonColor.blueComponent * 0.6,
+            buttonColor.alphaComponent
+        );
+        [self drawButtonCircle:cr 
+                         width:width 
+                        height:height 
+                         color:dimmedColor];
     }
     
     cairo_surface_flush(surface);
@@ -263,36 +261,30 @@ static XCBRenderingEngine *sharedInstance = nil;
     CGFloat centerY = height / 2.0;
     CGFloat radius = 6.0;
     
-    // Create gradient for 3D effect
     cairo_pattern_t *pat = cairo_pattern_create_radial(
         centerX - radius/4, centerY - radius/4, radius/8,
         centerX, centerY, radius
     );
     
-    // Highlight at top-left
     cairo_pattern_add_color_stop_rgb(pat, 0.0,
         fmin(color.redComponent * 1.3, 1.0),
         fmin(color.greenComponent * 1.3, 1.0),
         fmin(color.blueComponent * 1.3, 1.0));
     
-    // Base color
     cairo_pattern_add_color_stop_rgb(pat, 0.5,
         color.redComponent,
         color.greenComponent,
         color.blueComponent);
     
-    // Shadow at edges
     cairo_pattern_add_color_stop_rgb(pat, 1.0,
         color.redComponent * 0.85,
         color.greenComponent * 0.85,
         color.blueComponent * 0.85);
     
-    // Draw circle
     cairo_set_source(cr, pat);
     cairo_arc(cr, centerX, centerY, radius, 0, 2 * M_PI);
     cairo_fill_preserve(cr);
     
-    // Add subtle border
     cairo_set_line_width(cr, 0.75);
     cairo_set_source_rgba(cr, 0, 0, 0, 0.2);
     cairo_stroke(cr);
@@ -308,7 +300,6 @@ static XCBRenderingEngine *sharedInstance = nil;
         return;
     }
     
-    // Get visual
     XCBScreen *screen = [frame onScreen];
     XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
     [visual setVisualTypeForScreen:screen];
@@ -333,7 +324,6 @@ static XCBRenderingEngine *sharedInstance = nil;
     
     cairo_t *cr = cairo_create(surface);
     
-    // Create gradient for resize bar
     cairo_pattern_t *pat = cairo_pattern_create_linear(0, barY, 0, height);
     cairo_pattern_add_color_stop_rgb(pat, 0.0, 0.85, 0.85, 0.85);
     cairo_pattern_add_color_stop_rgb(pat, 1.0, 0.65, 0.65, 0.65);
@@ -351,10 +341,8 @@ static XCBRenderingEngine *sharedInstance = nil;
 #pragma mark - Utility Methods
 
 + (void)updateTitleForTitleBar:(XCBTitleBar *)titleBar {
-    // This just updates the title without full re-render
     XCBRenderingEngine *engine = [self sharedEngine];
     
-    // Only re-render if we have a valid title
     NSString *title = [titleBar windowTitle];
     if (title && [title length] > 0) {
         [engine renderTitleBarInternal:titleBar];
@@ -362,7 +350,6 @@ static XCBRenderingEngine *sharedInstance = nil;
 }
 
 + (void)refreshTitleBar:(XCBTitleBar *)titleBar {
-    // Force complete re-render
     titleBar.isRendered = NO;
     [[self sharedEngine] renderTitleBarInternal:titleBar];
 }
