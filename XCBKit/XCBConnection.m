@@ -19,6 +19,7 @@
 #import <xcb/xcb_aux.h>
 #import <enums/EIcccm.h>
 #import "services/TitleBarSettingsService.h"
+#import "XCBRenderingEngine.h"
 
 #define RESIZE_BAR_HEIGHT 9
 
@@ -1281,42 +1282,7 @@ static XCBConnection *sharedInstance;
         frame = (XCBFrame *)window;
         
         if (anEvent->y + anEvent->height >= [frame windowRect].size.height - RESIZE_BAR_HEIGHT) {
-            CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:self window:frame];
-            
-            XCBScreen *screen = [frame onScreen];
-            XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
-            [visual setVisualTypeForScreen:screen];
-            [drawer setVisual:visual];
-            
-            cairo_surface_t *surface = cairo_xcb_surface_create([self connection], 
-                                                               [frame window], 
-                                                               [visual visualType], 
-                                                               [frame windowRect].size.width, 
-                                                               [frame windowRect].size.height);
-            cairo_t *cr = cairo_create(surface);
-            
-            cairo_pattern_t *pat = cairo_pattern_create_linear(0, 
-                                                              [frame windowRect].size.height - RESIZE_BAR_HEIGHT,
-                                                              0, 
-                                                              [frame windowRect].size.height);
-            cairo_pattern_add_color_stop_rgb(pat, 0.0, 0.85, 0.85, 0.85);
-            cairo_pattern_add_color_stop_rgb(pat, 1.0, 0.65, 0.65, 0.65);
-            
-            cairo_rectangle(cr, 0, 
-                          [frame windowRect].size.height - RESIZE_BAR_HEIGHT, 
-                          [frame windowRect].size.width, 
-                          RESIZE_BAR_HEIGHT);
-            cairo_set_source(cr, pat);
-            cairo_fill(cr);
-            
-            cairo_pattern_destroy(pat);
-            cairo_surface_flush(surface);
-            cairo_surface_destroy(surface);
-            cairo_destroy(cr);
-            
-            drawer = nil;
-            screen = nil;
-            visual = nil;
+            [XCBRenderingEngine renderFrame:frame];
         }
     }
 
@@ -1366,7 +1332,6 @@ static XCBConnection *sharedInstance;
             area = XCBMakeRect(position, size);
             [titleBar drawArea:area];
         }
-
     }
 
     window = nil;
