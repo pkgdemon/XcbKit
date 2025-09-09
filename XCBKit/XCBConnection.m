@@ -1185,6 +1185,7 @@ static XCBConnection *sharedInstance;
             [drawer makePreviewImage];
             XCBPoint position = XCBMakePoint(100, 100);
             [frame createMiniWindowAtPosition:position];
+            [self unmapWindow:frame];
             [frame setIconicState];
         }
 
