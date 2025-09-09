@@ -1,3 +1,6 @@
+// XCBRenderingEngine.m
+// XCBKit
+
 #import "XCBRenderingEngine.h"
 #import "XCBTitleBar.h"
 #import "XCBFrame.h"
@@ -12,15 +15,16 @@
 
 @implementation XCBRenderingEngine
 
+static XCBRenderingEngine *sharedInstance = nil;
+
 #pragma mark - Singleton
 
 + (instancetype)sharedEngine {
-    static XCBRenderingEngine *instance = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        instance = [[XCBRenderingEngine alloc] init];
-    });
-    return instance;
+    // Simple singleton without GCD
+    if (sharedInstance == nil) {
+        sharedInstance = [[XCBRenderingEngine alloc] init];
+    }
+    return sharedInstance;
 }
 
 #pragma mark - Public Methods

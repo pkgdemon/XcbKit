@@ -7,7 +7,7 @@
 //
 
 #import "XCBTitleBar.h"
-#import "utils/CairoDrawer.h"
+#import "XCBRenderingEngine.h"
 #import "XCBThemeService.h"
 
 @implementation XCBTitleBar
@@ -38,6 +38,11 @@
 
     ewmhService = [EWMHService sharedInstanceWithConnection:[super connection]];
     
+    // Initialize theme colors
+    XCBThemeService *theme = [XCBThemeService sharedInstance];
+    titleBarUpColor = [theme titleBarActiveColor];
+    titleBarDownColor = [theme titleBarInactiveColor];
+    
     // CRITICAL FIX: Initialize windowTitle to nil instead of leaving it uninitialized
     windowTitle = nil;
     titleIsSet = NO;
@@ -47,122 +52,30 @@
 
 - (void) drawArcsForColor:(TitleBarColor)aColor
 {
-    XCBColor stopColor = XCBMakeColor(1,1,1,1);
-    XCBWindow *rootWindow = [parentWindow parentWindow];
-    XCBScreen *scr = [rootWindow screen];
-    XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[scr screen]->root_visual];
-    [visual setVisualTypeForScreen:scr];
-    XCBRect area;
-
-    CairoDrawer *drawer = nil;
+    // The rendering engine handles button drawing now
+    BOOL active = (aColor == TitleBarUpColor);
     
     if (hideWindowButton != nil)
     {
-        // REMOVE THE PNG LOADING - just draw the colored circle
-        drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:hideWindowButton visual:visual];
-
-        area = [hideWindowButton windowRect];
-        area.position.x = 0;
-        area.position.y = 0;
-
-        [hideWindowButton clearArea:area generatesExposure:NO];
-
-        [drawer drawTitleBarButtonWithColor:aColor == TitleBarUpColor ? hideButtonColor : titleBarDownColor withStopColor:stopColor];
-        // COMMENT OUT OR REMOVE THIS LINE:
-        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
-
-        drawer = nil;
+        [XCBRenderingEngine renderButton:hideWindowButton active:active];
     }
     
     if (minimizeWindowButton != nil)
     {
-        drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:minimizeWindowButton visual:visual];
-
-        area = [minimizeWindowButton windowRect];
-        area.position.x = 0;
-        area.position.y = 0;
-        [minimizeWindowButton clearArea:area generatesExposure:NO];
-
-        [drawer drawTitleBarButtonWithColor: aColor == TitleBarUpColor ? minimizeButtonColor : titleBarDownColor  withStopColor:stopColor];
-        // COMMENT OUT OR REMOVE THIS LINE:
-        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
-
-        drawer = nil;
+        [XCBRenderingEngine renderButton:minimizeWindowButton active:active];
     }
     
     if (maximizeWindowButton != nil)
     {
-        drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:maximizeWindowButton visual:visual];
-
-        area = [maximizeWindowButton windowRect];
-        area.position.x = 0;
-        area.position.y = 0;
-        [maximizeWindowButton clearArea:area generatesExposure:NO];
-
-        [drawer drawTitleBarButtonWithColor: aColor == TitleBarUpColor ? maximizeButtonColor : titleBarDownColor  withStopColor:stopColor];
-        // COMMENT OUT OR REMOVE THIS LINE:
-        // [drawer putImage:path forDPixmap:aColor == TitleBarUpColor ? NO : YES];
-
-        drawer = nil;
+        [XCBRenderingEngine renderButton:maximizeWindowButton active:active];
     }
-    
-    scr = nil;
-    visual = nil;
-    rootWindow = nil;
 }
 
 - (void) drawTitleBarForColor:(TitleBarColor)aColor
 {
-    XCBColor aux;
-    
-    if (aColor == TitleBarUpColor)
-        aux = titleBarUpColor;
-    
-    if (aColor == TitleBarDownColor)
-        aux = titleBarDownColor;
-
-    XCBRect area = XCBMakeRect(XCBMakePoint([super windowRect].position.x, [super windowRect].position.y),
-                               XCBMakeSize([super windowRect].size.width, [super windowRect].size.height));
-
-    [super clearArea:area generatesExposure:NO];
-    
-    XCBScreen *screen = [self onScreen];
-    XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
-    [visual setVisualTypeForScreen:screen];
-    
-    CairoDrawer *drawer = [[CairoDrawer alloc] initWithConnection:[super connection] window:self visual:visual];
-    
-    XCBColor stopColor = XCBMakeColor(0.850, 0.850, 0.850, 1);
-    [drawer drawTitleBarWithColor:aux andStopColor: stopColor];
-
-    /*** This is better than allocating/deallocating the drawer object for each window to draw, however find
-     * a better solution to avoid all the sets methods/messages ***/
-
-    //FIXME: now probably useless code.
-    /*if (hideWindowButton != nil)
-    {
-        [drawer setWindow:hideWindowButton];
-        [drawer setHeight:[hideWindowButton windowRect].size.height];
-        [drawer setWidth:[hideWindowButton windowRect].size.width];
-    }
-    
-    if (minimizeWindowButton != nil)
-    {
-        [drawer setWindow:minimizeWindowButton];
-        [drawer setHeight:[minimizeWindowButton windowRect].size.height];
-        [drawer setWidth:[minimizeWindowButton windowRect].size.width];
-    }
-    
-    if (maximizeWindowButton != nil)
-    {
-        [drawer setWindow:maximizeWindowButton];
-        [drawer setHeight:[maximizeWindowButton windowRect].size.height];
-        [drawer setWidth:[maximizeWindowButton windowRect].size.width];
-    }*/
-    
-    drawer = nil;
-    screen = nil;
-    visual = nil;
+    // The rendering engine handles this now
+    // It will render to both pixmaps internally
+    [XCBRenderingEngine renderTitleBar:self];
 }
 
 - (void) generateButtons
@@ -202,7 +115,7 @@
         [hideWindowButton setCanMove:NO];
         [hideWindowButton setIsCloseButton:YES];
 
-	hideButtonColor = [theme buttonCloseColor];
+        hideButtonColor = [theme buttonCloseColor];
 
         shapeExtensionSupported = [[hideWindowButton shape] checkSupported];
         [[hideWindowButton shape] calculateDimensionsFromGeometries:[hideWindowButton geometries]];
@@ -214,7 +127,6 @@
         }
         else
             NSLog(@"Shape extension not supported for window: %u", [hideWindowButton window]);
-
     }
 
     if ([[frame childWindowForKey:ClientWindow] canMinimize])
@@ -236,7 +148,7 @@
         [minimizeWindowButton setCanMove:NO];
         [minimizeWindowButton setIsMinimizeButton:YES];
 
-	minimizeButtonColor = [theme buttonMinimizeColor]; 
+        minimizeButtonColor = [theme buttonMinimizeColor]; 
 
         shapeExtensionSupported = [[minimizeWindowButton shape] checkSupported];
         [[minimizeWindowButton shape] calculateDimensionsFromGeometries:[minimizeWindowButton geometries]];
@@ -248,7 +160,6 @@
         }
         else
             NSLog(@"Shape extension not supported for window: %u", [minimizeWindowButton window]);
-
     }
 
     if ([[frame childWindowForKey:ClientWindow] canFullscreen])
@@ -270,7 +181,7 @@
         [maximizeWindowButton setCanMove:NO];
         [maximizeWindowButton setIsMaximizeButton:YES];
 
-	maximizeButtonColor = [theme buttonMaximizeColor];
+        maximizeButtonColor = [theme buttonMaximizeColor];
 
         shapeExtensionSupported = [[maximizeWindowButton shape] checkSupported];
         [[maximizeWindowButton shape] calculateDimensionsFromGeometries:[maximizeWindowButton geometries]];
@@ -336,11 +247,27 @@
 
 - (void) drawTitleBarComponentsPixmaps
 {
-    [self drawTitleBarForColor:TitleBarUpColor];
-    [self drawTitleBarForColor:TitleBarDownColor];
-    [self drawArcsForColor:TitleBarUpColor];
-    [self drawArcsForColor:TitleBarDownColor];
-    [self setWindowTitle:windowTitle];
+    // Use the rendering engine to draw everything
+    [XCBRenderingEngine renderTitleBar:self];
+    
+    // Render buttons to their pixmaps
+    if (hideWindowButton != nil)
+    {
+        [XCBRenderingEngine renderButton:hideWindowButton active:YES];
+        [XCBRenderingEngine renderButton:hideWindowButton active:NO];
+    }
+    
+    if (minimizeWindowButton != nil)
+    {
+        [XCBRenderingEngine renderButton:minimizeWindowButton active:YES];
+        [XCBRenderingEngine renderButton:minimizeWindowButton active:NO];
+    }
+    
+    if (maximizeWindowButton != nil)
+    {
+        [XCBRenderingEngine renderButton:maximizeWindowButton active:YES];
+        [XCBRenderingEngine renderButton:maximizeWindowButton active:NO];
+    }
 }
 
 - (void) setButtonsAbove:(BOOL)aValue
@@ -354,7 +281,7 @@
 {
     [hideWindowButton clearArea:[hideWindowButton windowRect] generatesExposure:NO];
     [minimizeWindowButton clearArea:[minimizeWindowButton windowRect] generatesExposure:NO];
-    [hideWindowButton clearArea:[maximizeWindowButton windowRect] generatesExposure:NO];
+    [maximizeWindowButton clearArea:[maximizeWindowButton windowRect] generatesExposure:NO];
 
     if (aValue)
     {
@@ -370,7 +297,6 @@
     }
 }
 
-// Also update setWindowTitle to be simpler:
 - (void) setWindowTitle:(NSString *) title
 {
     NSLog(@"=== TITLE DEBUG: Setting window title: '%@' ===", title);
@@ -383,68 +309,18 @@
         titleIsSet = YES;
     }
 
-    // Don't draw here - let drawTitleBarComponents handle it
-    // This prevents multiple drawing calls during resize
+    // Use the rendering engine to update the title
+    if (titleIsSet && [self pixmap] && [self dPixmap]) {
+        [XCBRenderingEngine updateTitleForTitleBar:self];
+    }
 }
 
-// Fixed method name to match header declaration
 - (void)drawTextToPixmaps:(NSString*)title {
-    XCBWindow *rootWindow = [parentWindow parentWindow];
-    XCBScreen *screen = [rootWindow screen];
-    XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
-    [visual setVisualTypeForScreen:screen];
-    
-    XCBColor black = XCBMakeColor(0, 0, 0, 1);
-    
-    // Draw to active pixmap
-    cairo_surface_t *activeSurface = cairo_xcb_surface_create([[super connection] connection], 
-                                                              [self pixmap], 
-                                                              [visual visualType], 
-                                                              [self windowRect].size.width, 
-                                                              [self windowRect].size.height);
-    cairo_t *activeCr = cairo_create(activeSurface);
-    
-    [self drawTitleText:title withCairo:activeCr color:black];
-    
-    cairo_surface_flush(activeSurface);
-    cairo_surface_destroy(activeSurface);
-    cairo_destroy(activeCr);
-    
-    // Draw to inactive pixmap
-    cairo_surface_t *inactiveSurface = cairo_xcb_surface_create([[super connection] connection], 
-                                                                [self dPixmap], 
-                                                                [visual visualType], 
-                                                                [self windowRect].size.width, 
-                                                                [self windowRect].size.height);
-    cairo_t *inactiveCr = cairo_create(inactiveSurface);
-    
-    [self drawTitleText:title withCairo:inactiveCr color:black];
-    
-    cairo_surface_flush(inactiveSurface);
-    cairo_surface_destroy(inactiveSurface);
-    cairo_destroy(inactiveCr);
-    
-    // Clean up
-    visual = nil;
-    rootWindow = nil;
-}
-
-// Add this helper method:
-- (void)drawTitleText:(NSString*)text withCairo:(cairo_t*)cr color:(XCBColor)color {
-    cairo_set_source_rgb(cr, color.redComponent, color.greenComponent, color.blueComponent);
-    cairo_select_font_face(cr, "Serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, 11);
-    
-    cairo_text_extents_t extents;
-    const char* utfString = [text UTF8String];
-    cairo_text_extents(cr, utfString, &extents);
-
-    CGFloat halfLength = extents.width / 2;
-    CGFloat textPositionX = (CGFloat)[self windowRect].size.width / 2;
-    CGFloat textPositionY = (CGFloat)[self windowRect].size.height / 2 + 2;
-    
-    cairo_move_to(cr, textPositionX - halfLength, textPositionY);
-    cairo_show_text(cr, utfString);
+    // This is now handled by the rendering engine
+    // Keep this method for compatibility but delegate to rendering engine
+    if (title && [title length] > 0) {
+        [self setWindowTitle:title];
+    }
 }
 
 - (NSString*) windowTitle
@@ -463,7 +339,7 @@
     minimizeWindowButton = nil;
     maximizeWindowButton = nil;
     ewmhService = nil;
-    windowTitle = nil; // CRITICAL FIX: Clean up windowTitle
+    windowTitle = nil;
 }
 
 @end

@@ -28,6 +28,7 @@ $(FRAMEWORK_NAME)_OBJC_FILES = \
 			XCBQueryTreeReply.m\
 			XCBShape.m \
 			XCBThemeService.m \
+			XCBRenderingEngine.m \
 			services/EWMHService.m \
 			services/XCBAtomService.m \
 			services/ICCCMService.m \
@@ -57,6 +58,7 @@ $(FRAMEWORK_NAME)_HEADER_FILES = \
 			XCBQueryTreeReply.h \
 			XCBShape.h \
 			XCBThemeService.h \
+			XCBRenderingEngine.h \
 			services/EWMHService.h \
 			services/XCBAtomService.h \
 			services/ICCCMService.h \

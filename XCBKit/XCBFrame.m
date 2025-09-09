@@ -10,9 +10,10 @@
 #import "functions/Transformers.h"
 #import "services/ICCCMService.h"
 #import "services/TitleBarSettingsService.h"
-#import "utils/CairoDrawer.h"
+#import "XCBRenderingEngine.h"
 #import <xcb/xcb_aux.h>
 
+#define RESIZE_BAR_HEIGHT 9
 
 @implementation XCBFrame
 
@@ -139,9 +140,6 @@
     TitleBarSettingsService *settings = [TitleBarSettingsService sharedInstance];
     uint16_t height = [settings heightDefined] ? [settings height] : [settings defaultHeight];
 
-    // Define resize bar height
-    #define RESIZE_BAR_HEIGHT 9
-
     // Create title bar
     XCBCreateWindowTypeRequest* request = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBTitleBarRequest];
     [request setDepth:XCB_COPY_FROM_PARENT];
@@ -218,50 +216,18 @@
     [titleBar generateButtons];
     [titleBar setIsAbove:YES];
     [titleBar setButtonsAbove:YES];
-    [titleBar drawTitleBarComponentsPixmaps];
+    
+    // Set the window title
+    [titleBar setWindowTitle:windowTitle];
+    
+    // Use the rendering engine to render the title bar and its components
+    [XCBRenderingEngine renderTitleBar:titleBar];
+    
+    // Put the rendered pixmaps to the windows
     [titleBar putWindowBackgroundWithPixmap:[titleBar pixmap]];
     [titleBar putButtonsBackgroundPixmaps:YES];
 
-    // Set and draw the title
-    [titleBar setWindowTitle:windowTitle];
-    
-    // Force immediate drawing to both pixmaps while they're fresh
-    if (windowTitle != nil && [windowTitle length] > 0) {
-        XCBWindow *rootWindow = [self parentWindow];
-        XCBScreen *screen = [rootWindow screen];
-        XCBVisual *visual = [[XCBVisual alloc] initWithVisualId:[screen screen]->root_visual];
-        [visual setVisualTypeForScreen:screen];
-        
-        // Draw to active pixmap
-        cairo_surface_t *activeSurface = cairo_xcb_surface_create([[titleBar connection] connection], 
-                                                                  [titleBar pixmap], 
-                                                                  [visual visualType], 
-                                                                  [titleBar windowRect].size.width, 
-                                                                  [titleBar windowRect].size.height);
-        cairo_t *activeCr = cairo_create(activeSurface);
-        [self drawTitleText:windowTitle withCairo:activeCr visual:visual];
-        cairo_surface_flush(activeSurface);
-        cairo_surface_destroy(activeSurface);
-        cairo_destroy(activeCr);
-        
-        // Draw to inactive pixmap
-        cairo_surface_t *inactiveSurface = cairo_xcb_surface_create([[titleBar connection] connection], 
-                                                                    [titleBar dPixmap], 
-                                                                    [visual visualType], 
-                                                                    [titleBar windowRect].size.width, 
-                                                                    [titleBar windowRect].size.height);
-        cairo_t *inactiveCr = cairo_create(inactiveSurface);
-        [self drawTitleText:windowTitle withCairo:inactiveCr visual:visual];
-        cairo_surface_flush(inactiveSurface);
-        cairo_surface_destroy(inactiveSurface);
-        cairo_destroy(inactiveCr);
-        
-        visual = nil;
-        rootWindow = nil;
-    }
-
-    // DON'T create a separate resize bar window - we'll handle it in the frame itself
-    // Just remove the ResizeBar from children if it exists
+    // Don't create a separate resize bar window - we'll handle it in the frame itself
     [self removeChild:ResizeBar];
 
     [clientWindow setDecorated:YES];
@@ -784,31 +750,6 @@ void resizeFromAngleForEvent(xcb_motion_notify_event_t *anEvent,
     clientWindow = nil;
     titleBar = nil;
 }
-
-- (void)drawTitleText:(NSString*)text withCairo:(cairo_t*)cr visual:(XCBVisual*)visual {
-    if (!text || [text length] == 0) return;
-    
-    XCBColor black = XCBMakeColor(0, 0, 0, 1);
-    cairo_set_source_rgb(cr, black.redComponent, black.greenComponent, black.blueComponent);
-    cairo_select_font_face(cr, "Serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, 11);
-    
-    cairo_text_extents_t extents;
-    const char* utfString = [text UTF8String];
-    cairo_text_extents(cr, utfString, &extents);
-
-    // Calculate centered position
-    XCBTitleBar *titleBar = (XCBTitleBar*)[self childWindowForKey:TitleBar];
-    CGFloat halfLength = extents.width / 2;
-    CGFloat textPositionX = (CGFloat)[titleBar windowRect].size.width / 2;
-    CGFloat textPositionY = (CGFloat)[titleBar windowRect].size.height / 2 + 2;
-    
-    cairo_move_to(cr, textPositionX - halfLength, textPositionY);
-    cairo_show_text(cr, utfString);
-    
-    titleBar = nil;
-}
-
 
 /********************************
  *                               *
