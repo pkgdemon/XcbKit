@@ -140,7 +140,6 @@
     TitleBarSettingsService *settings = [TitleBarSettingsService sharedInstance];
     uint16_t height = [settings heightDefined] ? [settings height] : [settings defaultHeight];
 
-    // Create title bar
     XCBCreateWindowTypeRequest* request = [[XCBCreateWindowTypeRequest alloc] initForWindowType:XCBTitleBarRequest];
     [request setDepth:XCB_COPY_FROM_PARENT];
     [request setParentWindow:self];
@@ -163,16 +162,13 @@
     ICCCMService* icccmService = [ICCCMService sharedInstanceWithConnection:connection];
     NSString* windowTitle = nil;
     
-    // Force a sync to ensure all client properties are processed
     [connection flush];
     xcb_aux_sync([connection connection]);
     
-    // Quick attempts - only try 5 times with minimal delay
     int attempts = 0;
     int maxAttempts = 5;
     
     while (attempts < maxAttempts) {
-        // Try EWMH first
         xcb_get_property_reply_t* reply = [ewmhService getProperty:[ewmhService EWMHWMName]
                                   propertyType:XCB_GET_PROPERTY_TYPE_ANY
                                      forWindow:clientWindow
@@ -191,7 +187,6 @@
             free(reply);
         }
         
-        // If EWMH failed, try ICCCM
         if (!windowTitle || [windowTitle length] == 0) {
             windowTitle = [icccmService getWmNameForWindow:clientWindow];
             if (windowTitle && [windowTitle length] > 0) {
@@ -199,12 +194,11 @@
             }
         }
         
-        usleep(1000); // 1ms
+        usleep(1000);
         [connection flush];
         attempts++;
     }
     
-    // Use placeholder if we still don't have a title
     if (!windowTitle || [windowTitle length] == 0) {
         windowTitle = @"";
     }
@@ -217,33 +211,27 @@
     [titleBar setIsAbove:YES];
     [titleBar setButtonsAbove:YES];
     
-    // Set the window title
     [titleBar setWindowTitle:windowTitle];
     
-    // Use the rendering engine to render the title bar and its components
     [XCBRenderingEngine renderTitleBar:titleBar];
     
-    // Put the rendered pixmaps to the windows
+    [titleBar drawTitleBarComponentsPixmaps];  // ADD THIS LINE
     [titleBar putWindowBackgroundWithPixmap:[titleBar pixmap]];
     [titleBar putButtonsBackgroundPixmaps:YES];
 
-    // Don't create a separate resize bar window - we'll handle it in the frame itself
     [self removeChild:ResizeBar];
 
     [clientWindow setDecorated:YES];
     [clientWindow setWindowBorderWidth:0];
     [connection mapWindow:titleBar];
 
-    // Adjust client window position and size to account for both title bar and resize bar space
     XCBPoint position = XCBMakePoint(0, height - 1);
     [connection reparentWindow:clientWindow toWindow:self position:position];
     
-    // Configure client window height to account for resize bar space
     uint32_t clientHeight = [self windowRect].size.height - height - RESIZE_BAR_HEIGHT;
     uint32_t configValues[] = {clientHeight};
     xcb_configure_window([connection connection], [clientWindow window], XCB_CONFIG_WINDOW_HEIGHT, configValues);
     
-    // Update client window rect
     XCBRect clientRect = [clientWindow windowRect];
     clientRect.size.height = clientHeight;
     [clientWindow setWindowRect:clientRect];
