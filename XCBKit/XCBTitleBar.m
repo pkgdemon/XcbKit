@@ -23,6 +23,7 @@
 @synthesize titleBarDownColor;
 @synthesize ewmhService;
 @synthesize titleIsSet;
+@synthesize isRendered;
 
 
 - (id) initWithFrame:(XCBFrame *)aFrame withConnection:(XCBConnection *)aConnection
@@ -38,21 +39,19 @@
 
     ewmhService = [EWMHService sharedInstanceWithConnection:[super connection]];
     
-    // Initialize theme colors
     XCBThemeService *theme = [XCBThemeService sharedInstance];
     titleBarUpColor = [theme titleBarActiveColor];
     titleBarDownColor = [theme titleBarInactiveColor];
     
-    // CRITICAL FIX: Initialize windowTitle to nil instead of leaving it uninitialized
     windowTitle = nil;
     titleIsSet = NO;
+    isRendered = NO;
     
     return self;
 }
 
 - (void) drawArcsForColor:(TitleBarColor)aColor
 {
-    // The rendering engine handles button drawing now
     BOOL active = (aColor == TitleBarUpColor);
     
     if (hideWindowButton != nil)
@@ -73,8 +72,6 @@
 
 - (void) drawTitleBarForColor:(TitleBarColor)aColor
 {
-    // The rendering engine handles this now
-    // It will render to both pixmaps internally
     [XCBRenderingEngine renderTitleBar:self];
 }
 
@@ -216,10 +213,8 @@
 
 - (void)drawTitleBarComponents
 {
-    // Just copy from the appropriate pixmap - the title is already there
     [super drawArea:[super windowRect]];
     
-    // Draw buttons
     if (hideWindowButton != nil)
     {
         XCBRect area = [hideWindowButton windowRect];
@@ -247,10 +242,8 @@
 
 - (void) drawTitleBarComponentsPixmaps
 {
-    // Use the rendering engine to draw everything
     [XCBRenderingEngine renderTitleBar:self];
     
-    // Render buttons to their pixmaps
     if (hideWindowButton != nil)
     {
         [XCBRenderingEngine renderButton:hideWindowButton active:YES];
@@ -279,21 +272,41 @@
 
 - (void)putButtonsBackgroundPixmaps:(BOOL)aValue
 {
-    [hideWindowButton clearArea:[hideWindowButton windowRect] generatesExposure:NO];
-    [minimizeWindowButton clearArea:[minimizeWindowButton windowRect] generatesExposure:NO];
-    [maximizeWindowButton clearArea:[maximizeWindowButton windowRect] generatesExposure:NO];
-
-    if (aValue)
-    {
-        [hideWindowButton putWindowBackgroundWithPixmap:[hideWindowButton pixmap]];
-        [minimizeWindowButton putWindowBackgroundWithPixmap:[minimizeWindowButton pixmap]];
-        [maximizeWindowButton putWindowBackgroundWithPixmap:[maximizeWindowButton pixmap]];
+    if (hideWindowButton) {
+        [hideWindowButton clearArea:[hideWindowButton windowRect] generatesExposure:NO];
     }
-    else
-    {
-        [hideWindowButton putWindowBackgroundWithPixmap:[hideWindowButton dPixmap]];
-        [minimizeWindowButton putWindowBackgroundWithPixmap:[minimizeWindowButton dPixmap]];
-        [maximizeWindowButton putWindowBackgroundWithPixmap:[maximizeWindowButton dPixmap]];
+    if (minimizeWindowButton) {
+        [minimizeWindowButton clearArea:[minimizeWindowButton windowRect] generatesExposure:NO];
+    }
+    if (maximizeWindowButton) {
+        [maximizeWindowButton clearArea:[maximizeWindowButton windowRect] generatesExposure:NO];
+    }
+
+    if (hideWindowButton && [hideWindowButton pixmap] && [hideWindowButton dPixmap]) {
+        [XCBRenderingEngine renderButton:hideWindowButton active:aValue];
+        if (aValue) {
+            [hideWindowButton putWindowBackgroundWithPixmap:[hideWindowButton pixmap]];
+        } else {
+            [hideWindowButton putWindowBackgroundWithPixmap:[hideWindowButton dPixmap]];
+        }
+    }
+    
+    if (minimizeWindowButton && [minimizeWindowButton pixmap] && [minimizeWindowButton dPixmap]) {
+        [XCBRenderingEngine renderButton:minimizeWindowButton active:aValue];
+        if (aValue) {
+            [minimizeWindowButton putWindowBackgroundWithPixmap:[minimizeWindowButton pixmap]];
+        } else {
+            [minimizeWindowButton putWindowBackgroundWithPixmap:[minimizeWindowButton dPixmap]];
+        }
+    }
+    
+    if (maximizeWindowButton && [maximizeWindowButton pixmap] && [maximizeWindowButton dPixmap]) {
+        [XCBRenderingEngine renderButton:maximizeWindowButton active:aValue];
+        if (aValue) {
+            [maximizeWindowButton putWindowBackgroundWithPixmap:[maximizeWindowButton pixmap]];
+        } else {
+            [maximizeWindowButton putWindowBackgroundWithPixmap:[maximizeWindowButton dPixmap]];
+        }
     }
 }
 
@@ -309,15 +322,17 @@
         titleIsSet = YES;
     }
 
-    // Use the rendering engine to update the title
     if (titleIsSet && [self pixmap] && [self dPixmap]) {
         [XCBRenderingEngine updateTitleForTitleBar:self];
+        if ([self isAbove]) {
+            [self putWindowBackgroundWithPixmap:[self pixmap]];
+        } else {
+            [self putWindowBackgroundWithPixmap:[self dPixmap]];
+        }
     }
 }
 
 - (void)drawTextToPixmaps:(NSString*)title {
-    // This is now handled by the rendering engine
-    // Keep this method for compatibility but delegate to rendering engine
     if (title && [title length] > 0) {
         [self setWindowTitle:title];
     }
